@@ -1,0 +1,52 @@
+{
+  "symbols": ["AAPL", "MSFT", "GOOGL", "META", "AMZN"],
+  "period": "2y",
+  "interval": "1d",
+  "max_lag": 10,
+  "correlation_method": "pearson",
+  "return_method": "pct_change",
+  "min_correlation": 0.1,
+  "backtest_top_n": 5,
+  "output_dir": "output",
+  "plots_dir": "plots",
+  "analysis_configs": {
+    "tech_giants": {
+      "symbols": ["AAPL", "MSFT", "GOOGL", "META", "AMZN", "TSLA", "NVDA"],
+      "description": "Major technology companies analysis"
+    },
+    "banking_sector": {
+      "symbols": ["JPM", "BAC", "WFC", "C", "GS", "MS"],
+      "description": "Banking sector lead-lag relationships"
+    },
+    "energy_sector": {
+      "symbols": ["XOM", "CVX", "COP", "EOG", "SLB", "OXY"],
+      "description": "Energy sector correlation analysis"
+    },
+    "healthcare": {
+      "symbols": ["JNJ", "PFE", "UNH", "MRK", "ABBV", "TMO"],
+      "description": "Healthcare and pharmaceutical stocks"
+    },
+    "consumer_goods": {
+      "symbols": ["PG", "KO", "PEP", "WMT", "HD", "MCD"],
+      "description": "Consumer goods and retail"
+    }
+  },
+  "backtest_settings": {
+    "initial_capital": 100000,
+    "transaction_cost": 0.001,
+    "risk_free_rate": 0.02,
+    "max_position_size": 0.1,
+    "signal_threshold": 0.02
+  },
+  "data_settings": {
+    "cache_max_age_hours": 1,
+    "rate_limit_delay": 0.1,
+    "min_periods": 30
+  },
+  "visualization_settings": {
+    "figure_size": [12, 8],
+    "save_plots": true,
+    "plot_format": "png",
+    "plot_dpi": 300
+  }
+}
