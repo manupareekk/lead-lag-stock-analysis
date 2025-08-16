@@ -1322,20 +1322,20 @@ def main():
             # Correlation Discovery Summary
             st.markdown('<h2 class="sub-header">🔍 Correlation Discovery Results</h2>', unsafe_allow_html=True)
             
-            summary = results.get('summary', {})
+            summary = results.get('correlation_summary', {})
             
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
                 st.metric(
                     "Total Stock Pairs",
-                    summary.get('total_pairs', 0)
+                    summary.get('total_pairs_analyzed', 0)
                 )
             
             with col2:
                 st.metric(
                     "High Correlations Found",
-                    summary.get('high_correlations_found', 0)
+                    summary.get('pairs_above_threshold', 0)
                 )
             
             with col3:
@@ -1347,7 +1347,7 @@ def main():
             with col4:
                 st.metric(
                     "Average of Top Correlations",
-                    f"{summary.get('average_top_correlation', 0):.3f}"
+                    f"{summary.get('average_correlation', 0):.3f}"
                 )
             
             # Display correlation discovery results
@@ -1460,31 +1460,32 @@ def main():
             st.markdown('<h2 class="sub-header">🚀 Enhanced Correlation Discovery Results</h2>', unsafe_allow_html=True)
             
             summary = results.get('summary', {})
+            overall_stats = summary.get('overall_stats', {})
             
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
                 st.metric(
                     "Time Horizons Analyzed",
-                    summary.get('time_horizons_count', 0)
+                    len(summary.get('time_horizons_tested', []))
                 )
             
             with col2:
                 st.metric(
                     "Total Correlations Found",
-                    summary.get('total_correlations_found', 0)
+                    summary.get('total_pairs_found', 0)
                 )
             
             with col3:
                 st.metric(
                     "Best Overall Correlation",
-                    f"{summary.get('best_overall_correlation', 0):.3f}"
+                    f"{overall_stats.get('highest_correlation', 0):.3f}"
                 )
             
             with col4:
                 st.metric(
                     "Optimal Time Horizon",
-                    summary.get('best_horizon', 'N/A')
+                    overall_stats.get('most_frequent_horizon', 'N/A')
                 )
             
             # Display enhanced correlation results
