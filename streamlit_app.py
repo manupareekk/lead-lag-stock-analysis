@@ -188,6 +188,10 @@ def initialize_system():
     """Initialize the lead-lag analysis system"""
     return LeadLagSystem()
 
+def clear_cache():
+    """Clear Streamlit cache to reload updated modules"""
+    st.cache_resource.clear()
+
 def get_time_unit_label(interval):
     """Get appropriate time unit label based on interval"""
     if interval == "1m":
@@ -463,6 +467,11 @@ def main():
     # Initialize system
     system = initialize_system()
     sample_symbols = load_sample_symbols()
+    
+    # Add cache clearing button in sidebar
+    if st.sidebar.button("🔄 Clear Cache & Reload", help="Clear cache and reload modules if you encounter errors"):
+        clear_cache()
+        st.rerun()
     
     # Sidebar configuration
     st.sidebar.header("📊 Analysis Configuration")
@@ -1283,10 +1292,25 @@ def main():
                     progress_bar.progress(10)
                     
                     # Get enhanced parameters from session state
-                    time_horizons = st.session_state.get('time_horizons', ['1y'])
+                    time_horizons_raw = st.session_state.get('time_horizons', ['1y'])
                     lag_periods_raw = st.session_state.get('lag_periods', [1, 3, 5, 10, 20])
                     top_n_enhanced = st.session_state.get('top_n_enhanced', 10)
                     correlation_min_threshold_enhanced = st.session_state.get('correlation_min_threshold_enhanced', 0.3)
+                    
+                    # Convert time horizons from strings to days
+                    def convert_time_horizon_to_days(horizon_str):
+                        if horizon_str.endswith('d'):
+                            return int(horizon_str[:-1])
+                        elif horizon_str.endswith('w'):
+                            return int(horizon_str[:-1]) * 7
+                        elif horizon_str.endswith('m'):
+                            return int(horizon_str[:-1]) * 30
+                        elif horizon_str.endswith('y'):
+                            return int(horizon_str[:-1]) * 365
+                        else:
+                            return int(horizon_str)  # assume days if no unit
+                    
+                    time_horizons = [convert_time_horizon_to_days(h) for h in time_horizons_raw]
                     
                     # Convert lag periods to standard units for backend processing
                     lag_periods_converted = convert_lag_periods_to_standard_units(lag_periods_raw, interval)
@@ -1294,6 +1318,7 @@ def main():
                     # Run enhanced correlation discovery
                     enhanced_config = {
                         'symbols': symbols,
+                        'period': period,
                         'time_horizons': time_horizons,
                         'lag_periods': lag_periods_converted,
                         'interval': interval,
