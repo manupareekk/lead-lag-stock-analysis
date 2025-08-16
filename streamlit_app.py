@@ -542,6 +542,7 @@ def main():
             max_value=1.0,
             value=0.2,
             step=0.05,
+            key="min_correlation_leadlag",
             help="Only show lead-lag relationships above this correlation threshold"
         )
         
@@ -554,6 +555,7 @@ def main():
             max_value=1.0,
             value=0.3,
             step=0.05,
+            key="min_correlation_discovery",
             help="Only show correlations above this threshold"
         )
         
@@ -799,6 +801,7 @@ def main():
             max_value=1.0,
             value=0.3,
             step=0.05,
+            key="min_correlation_enhanced",
             help="Only show correlations above this threshold"
         )
         
