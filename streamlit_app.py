@@ -199,6 +199,35 @@ def get_time_unit_label(interval):
     else:
         return "days"
 
+def convert_lag_periods_to_standard_units(lag_periods, interval):
+    """Convert lag periods from interval-specific units to standard periods
+    
+    Args:
+        lag_periods: List of lag periods in interval-specific units
+        interval: Time interval (e.g., '1m', '5m', '1h', '1d')
+    
+    Returns:
+        List of lag periods converted to standard periods for the backend
+    """
+    if interval == "1m":
+        # For 1-minute data, convert minutes to periods (1 period = 1 minute)
+        return lag_periods
+    elif interval == "5m":
+        # For 5-minute data, convert minutes to periods (1 period = 5 minutes)
+        return [max(1, lag // 5) for lag in lag_periods]
+    elif interval == "15m":
+        # For 15-minute data, convert minutes to periods (1 period = 15 minutes)
+        return [max(1, lag // 15) for lag in lag_periods]
+    elif interval == "30m":
+        # For 30-minute data, convert minutes to periods (1 period = 30 minutes)
+        return [max(1, lag // 30) for lag in lag_periods]
+    elif interval == "1h":
+        # For 1-hour data, convert hours to periods (1 period = 1 hour)
+        return lag_periods
+    else:
+        # For daily+ data, lag periods are already in the correct unit (days)
+        return lag_periods
+
 def create_correlation_heatmap(results_df, lag_periods=0, interval='1d'):
     """Create interactive correlation heatmap"""
     lag_data = results_df[results_df['lag_days'] == lag_periods]
@@ -767,23 +796,39 @@ def main():
             st.sidebar.warning("⚠️ Please select at least one time horizon")
             time_horizons = ["1y"]  # Default fallback
         
-        # Lag periods selection
-        st.sidebar.markdown("**⏱️ Lag Periods (days):**")
+        # Lag periods selection - dynamic based on interval
+        lag_unit = get_time_unit_label(interval)
+        
+        # Set appropriate default values based on interval
+        if interval == "1m":
+            default_lags = "5,15,30,60,120"  # minutes
+            help_text = "Enter lag periods in minutes, separated by commas (e.g., 5,15,30,60,120)"
+        elif interval in ["5m", "15m", "30m"]:
+            default_lags = "15,30,60,120,240"  # minutes
+            help_text = f"Enter lag periods in minutes, separated by commas (e.g., 15,30,60,120,240)"
+        elif interval == "1h":
+            default_lags = "1,3,6,12,24"  # hours
+            help_text = "Enter lag periods in hours, separated by commas (e.g., 1,3,6,12,24)"
+        else:
+            default_lags = "1,3,5,10,20"  # days
+            help_text = "Enter lag periods in days, separated by commas (e.g., 1,3,5,10,20)"
+        
+        st.sidebar.markdown(f"**⏱️ Lag Periods ({lag_unit}):**")
         lag_periods_input = st.sidebar.text_input(
             "Lag periods (comma-separated):",
-            value="1,3,5,10,20",
-            help="Enter lag periods in days, separated by commas (e.g., 1,3,5,10,20)"
+            value=default_lags,
+            help=help_text
         )
         
         try:
             lag_periods = [int(x.strip()) for x in lag_periods_input.split(",") if x.strip()]
             if not lag_periods:
-                lag_periods = [1, 3, 5, 10, 20]  # Default
+                lag_periods = [int(x) for x in default_lags.split(",")]  # Use defaults
         except ValueError:
             st.sidebar.error("Invalid lag periods format. Using default values.")
-            lag_periods = [1, 3, 5, 10, 20]
+            lag_periods = [int(x) for x in default_lags.split(",")]
         
-        st.sidebar.write(f"Selected lag periods: {', '.join(map(str, lag_periods))} days")
+        st.sidebar.write(f"Selected lag periods: {', '.join(map(str, lag_periods))} {lag_unit}")
         
         # Top N correlations
         top_n_enhanced = st.sidebar.slider(
@@ -1141,12 +1186,15 @@ def main():
                     status_text.text("Fetching stock data...")
                     progress_bar.progress(20)
                     
+                    # Convert max_lag to standard units for backend processing
+                    max_lag_converted = convert_lag_periods_to_standard_units([max_lag], interval)[0]
+                    
                     # Run analysis with advanced parameters
                     analysis_config = {
                         'symbols': symbols,
                         'period': period,
                         'interval': interval,
-                        'max_lag': max_lag,
+                        'max_lag': max_lag_converted,
                         'correlation_method': correlation_method,
                         'min_correlation': min_correlation,
                         'backtest_top_n': backtest_top_n,
@@ -1189,6 +1237,9 @@ def main():
                     status_text.text("Fetching stock data...")
                     progress_bar.progress(20)
                     
+                    # Convert max_lag to standard units for backend processing
+                    max_lag_converted = convert_lag_periods_to_standard_units([max_lag], interval)[0]
+                    
                     # Run correlation discovery
                     correlation_config = {
                         'symbols': symbols,
@@ -1198,7 +1249,7 @@ def main():
                         'correlation_method': correlation_method,
                         'return_method': return_method,
                         'min_correlation': correlation_min_threshold,
-                        'lag_days': max_lag,  # Fixed parameter name
+                        'lag_days': max_lag_converted,  # Fixed parameter name
                         'enable_monte_carlo': enable_monte_carlo,
                         'monte_carlo_iterations': monte_carlo_iterations,
                         'enable_bootstrap': enable_bootstrap,
@@ -1233,15 +1284,18 @@ def main():
                     
                     # Get enhanced parameters from session state
                     time_horizons = st.session_state.get('time_horizons', ['1y'])
-                    lag_periods = st.session_state.get('lag_periods', [1, 3, 5, 10, 20])
+                    lag_periods_raw = st.session_state.get('lag_periods', [1, 3, 5, 10, 20])
                     top_n_enhanced = st.session_state.get('top_n_enhanced', 10)
                     correlation_min_threshold_enhanced = st.session_state.get('correlation_min_threshold_enhanced', 0.3)
+                    
+                    # Convert lag periods to standard units for backend processing
+                    lag_periods_converted = convert_lag_periods_to_standard_units(lag_periods_raw, interval)
                     
                     # Run enhanced correlation discovery
                     enhanced_config = {
                         'symbols': symbols,
                         'time_horizons': time_horizons,
-                        'lag_periods': lag_periods,
+                        'lag_periods': lag_periods_converted,
                         'interval': interval,
                         'top_n': top_n_enhanced,
                         'correlation_method': correlation_method,
