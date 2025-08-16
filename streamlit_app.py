@@ -1441,6 +1441,19 @@ def main():
             if 'correlation_results' in results and not results['correlation_results'].empty:
                 st.markdown('<h3 class="sub-header">🏆 Top Correlated Stock Pairs</h3>', unsafe_allow_html=True)
                 
+                # Add explanatory text about units
+                interval = st.session_state.get('interval', '1d')
+                period = st.session_state.get('period', '1y')
+                
+                st.info(
+                    f"📊 **Understanding the Results:**\n"
+                    f"• **Data Period**: {period} of historical data was analyzed\n"
+                    f"• **Data Interval**: Price data sampled at {interval} intervals\n"
+                    f"• **Correlation**: Strength of relationship between stock pairs (-1 to +1)\n"
+                    f"• **P-Value**: Statistical significance (lower values indicate more reliable correlations)\n"
+                    f"• **Strength**: Qualitative assessment of correlation magnitude (Weak/Moderate/Strong/Very Strong)"
+                )
+                
                 correlation_df = results['correlation_results']
                 
                 # Display columns based on available data
@@ -1579,6 +1592,18 @@ def main():
             if 'correlation_results' in results and not results['correlation_results'].empty:
                 st.markdown('<h3 class="sub-header">🏆 Top Enhanced Correlations</h3>', unsafe_allow_html=True)
                 
+                # Add explanatory text about units
+                interval = st.session_state.get('interval', '1d')
+                lag_unit = get_time_unit_label(interval)
+                
+                st.info(
+                    f"📊 **Understanding the Results:**\n"
+                    f"• **Time Horizon**: Historical data period used for analysis (e.g., '1y' = 1 year of data)\n"
+                    f"• **Lag Period**: Time delay between stock movements, measured in **{lag_unit}** (based on your {interval} data interval)\n"
+                    f"• **Correlation**: Strength of relationship (-1 to +1, where ±1 is perfect correlation)\n"
+                    f"• **P-Value**: Statistical significance (lower values indicate more reliable relationships)"
+                )
+                
                 enhanced_df = results['correlation_results']
                 
                 # Display columns for enhanced results
@@ -1693,6 +1718,21 @@ def main():
             summary = results['analysis_summary']
             if 'most_predictive_pairs' in summary and summary['most_predictive_pairs']:
                 st.markdown('<h3 class="sub-header">🏆 Top Predictive Relationships</h3>', unsafe_allow_html=True)
+                
+                # Add explanatory text about units
+                interval = st.session_state.get('interval', '1d')
+                lag_unit = get_time_unit_label(interval)
+                period = st.session_state.get('period', '1y')
+                
+                st.info(
+                    f"📊 **Understanding the Results:**\n"
+                    f"• **Data Period**: {period} of historical data was analyzed\n"
+                    f"• **Lag Period**: Time delay for predictive relationships, measured in **{lag_unit}** (based on your {interval} data interval)\n"
+                    f"• **Leader**: Stock that moves first and can predict the follower's movement\n"
+                    f"• **Follower**: Stock that follows the leader's movement after the lag period\n"
+                    f"• **Correlation**: Strength of predictive relationship (-1 to +1)\n"
+                    f"• **P-Value**: Statistical significance (lower values indicate more reliable predictions)"
+                )
                 
                 top_pairs_df = pd.DataFrame(summary['most_predictive_pairs'])
                 
