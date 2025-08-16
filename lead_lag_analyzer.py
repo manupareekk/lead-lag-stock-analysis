@@ -576,6 +576,132 @@ class LeadLagAnalyzer:
         
         return results_df.reset_index(drop=True)
     
+    def find_highest_correlations(self,
+                                 price_data: pd.DataFrame,
+                                 top_n: int = 10,
+                                 method: str = 'pearson',
+                                 return_method: str = 'pct_change',
+                                 min_correlation: float = 0.5,
+                                 lag_days: int = 0) -> pd.DataFrame:
+        """Find stocks with highest correlations in a given universe
+        
+        Args:
+            price_data: DataFrame with stock prices (columns = symbols)
+            top_n: Number of top correlated pairs to return
+            method: Correlation method ('pearson' or 'spearman')
+            return_method: Method to calculate returns
+            min_correlation: Minimum absolute correlation threshold
+            lag_days: Specific lag to analyze (0 for contemporaneous)
+        
+        Returns:
+            DataFrame with highest correlated stock pairs
+        """
+        symbols = price_data.columns.tolist()
+        correlation_results = []
+        
+        logger.info(f"Finding highest correlations among {len(symbols)} stocks")
+        
+        # Calculate returns once
+        returns_data = self.calculate_returns(price_data, return_method)
+        
+        # Analyze all unique pairs (avoid duplicates like A-B and B-A)
+        for i, stock1 in enumerate(symbols):
+            for j, stock2 in enumerate(symbols[i+1:], i+1):
+                try:
+                    # Get return series
+                    returns1 = returns_data[stock1]
+                    returns2 = returns_data[stock2]
+                    
+                    # Apply lag if specified
+                    if lag_days > 0:
+                        returns1 = self.create_lagged_series(returns1, lag_days)
+                    elif lag_days < 0:
+                        returns2 = self.create_lagged_series(returns2, abs(lag_days))
+                    
+                    # Calculate correlation with confidence interval
+                    corr, p_value, ci = self.calculate_correlation_with_ci(
+                        returns1, returns2, method
+                    )
+                    
+                    if not np.isnan(corr) and abs(corr) >= min_correlation:
+                        # Calculate additional statistics if enabled
+                        bootstrap_ci = None
+                        monte_carlo_p = None
+                        
+                        if self.enable_bootstrap:
+                            bootstrap_ci = self.bootstrap_confidence_interval(
+                                returns1, returns2, method
+                            )
+                        
+                        if self.enable_monte_carlo:
+                            monte_carlo_p = self.monte_carlo_significance_test(
+                                returns1, returns2, corr, method
+                            )
+                        
+                        # Determine sample size
+                        valid_data = pd.concat([returns1, returns2], axis=1).dropna()
+                        sample_size = len(valid_data)
+                        
+                        correlation_results.append({
+                            'stock1': stock1,
+                            'stock2': stock2,
+                            'correlation': corr,
+                            'abs_correlation': abs(corr),
+                            'p_value': p_value,
+                            'ci_lower': ci[0],
+                            'ci_upper': ci[1],
+                            'bootstrap_ci_lower': bootstrap_ci[0] if bootstrap_ci else np.nan,
+                            'bootstrap_ci_upper': bootstrap_ci[1] if bootstrap_ci else np.nan,
+                            'monte_carlo_p_value': monte_carlo_p,
+                            'sample_size': sample_size,
+                            'lag_days': lag_days,
+                            'method': method,
+                            'is_significant': p_value < 0.05 if not np.isnan(p_value) else False,
+                            'strength': self._get_correlation_strength(abs(corr))
+                        })
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to analyze correlation {stock1}-{stock2}: {e}")
+        
+        if not correlation_results:
+            logger.warning(f"No correlations found above threshold {min_correlation}")
+            return pd.DataFrame()
+        
+        # Convert to DataFrame and sort by absolute correlation
+        results_df = pd.DataFrame(correlation_results)
+        results_df = results_df.sort_values('abs_correlation', ascending=False)
+        
+        # Apply multiple comparison correction if we have multiple results
+        if len(results_df) > 1:
+            try:
+                rejected, adjusted_p_values, _, _ = multipletests(
+                    results_df['p_value'].values,
+                    alpha=0.05,
+                    method='fdr_bh'
+                )
+                results_df['adjusted_p_value'] = adjusted_p_values
+                results_df['is_significant_adjusted'] = rejected
+            except Exception as e:
+                logger.warning(f"Multiple comparison correction failed: {e}")
+                results_df['adjusted_p_value'] = results_df['p_value']
+                results_df['is_significant_adjusted'] = results_df['is_significant']
+        
+        # Return top N results
+        return results_df.head(top_n)
+    
+    def _get_correlation_strength(self, abs_corr: float) -> str:
+        """Categorize correlation strength"""
+        if abs_corr >= 0.8:
+            return 'Very Strong'
+        elif abs_corr >= 0.6:
+            return 'Strong'
+        elif abs_corr >= 0.4:
+            return 'Moderate'
+        elif abs_corr >= 0.2:
+            return 'Weak'
+        else:
+            return 'Very Weak'
+    
     def find_best_predictors(self, 
                            results_df: pd.DataFrame, 
                            target_stock: str,

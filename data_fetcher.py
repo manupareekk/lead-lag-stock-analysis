@@ -7,6 +7,15 @@ import time
 import logging
 from pathlib import Path
 import pickle
+import asyncio
+import aiohttp
+import concurrent.futures
+from functools import lru_cache
+import threading
+from queue import Queue
+import warnings
+from performance_monitor import performance_monitor
+warnings.filterwarnings('ignore')
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,9 +23,12 @@ logger = logging.getLogger(__name__)
 class StockDataFetcher:
     """Handles fetching and caching stock data from Yahoo Finance"""
     
-    def __init__(self, cache_dir: str = "cache"):
+    def __init__(self, cache_dir: str = "cache", max_workers: int = 10):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
+        self.max_workers = max_workers
+        self._session_cache = {}
+        self._lock = threading.Lock()
         
     def get_cache_path(self, symbol: str, period: str, interval: str) -> Path:
         """Generate cache file path for given parameters"""
@@ -30,6 +42,50 @@ class StockDataFetcher:
         
         file_age = datetime.now() - datetime.fromtimestamp(cache_path.stat().st_mtime)
         return file_age < timedelta(hours=max_age_hours)
+    
+    @lru_cache(maxsize=1000)
+    def _get_cached_data(self, cache_key: str) -> Optional[pd.DataFrame]:
+        """LRU cached method for loading data from disk cache"""
+        try:
+            cache_path = Path(cache_key)
+            if cache_path.exists():
+                with open(cache_path, 'rb') as f:
+                    return pickle.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load cached data from {cache_key}: {e}")
+        return None
+    
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Get cache statistics"""
+        cache_files = list(self.cache_dir.glob("*.pkl"))
+        total_size = sum(f.stat().st_size for f in cache_files)
+        
+        return {
+            'total_files': len(cache_files),
+            'total_size_mb': round(total_size / (1024 * 1024), 2),
+            'memory_cache_size': self._get_cached_data.cache_info().currsize,
+            'memory_cache_hits': self._get_cached_data.cache_info().hits,
+            'memory_cache_misses': self._get_cached_data.cache_info().misses
+        }
+    
+    def optimize_cache(self, max_age_days: int = 7):
+        """Remove old cache files to optimize storage"""
+        cache_files = list(self.cache_dir.glob("*.pkl"))
+        removed_count = 0
+        
+        cutoff_time = datetime.now() - timedelta(days=max_age_days)
+        
+        for cache_file in cache_files:
+            file_time = datetime.fromtimestamp(cache_file.stat().st_mtime)
+            if file_time < cutoff_time:
+                cache_file.unlink()
+                removed_count += 1
+        
+        # Clear memory cache
+        self._get_cached_data.cache_clear()
+        
+        logger.info(f"Removed {removed_count} old cache files (older than {max_age_days} days)")
+        return removed_count
     
     def validate_period_interval(self, period: str, interval: str) -> Tuple[str, str]:
         """Validate and adjust period-interval combinations based on Yahoo Finance limits
@@ -49,9 +105,16 @@ class StockDataFetcher:
                 period = "7d"
         elif interval in ["5m", "15m", "30m"]:
             # Sub-hourly data: maximum 60 days
-            if period in ["6mo", "1y", "2y", "5y", "max"]:
-                logger.warning(f"Period '{period}' too long for {interval} interval. Adjusting to '60d'.")
-                period = "60d"
+            if period in ["1w", "1mo", "6mo", "1y", "2y", "5y", "max"]:
+                if period == "1w":
+                    logger.warning(f"Period '{period}' adjusted for {interval} interval. Using '7d'.")
+                    period = "7d"
+                elif period == "1mo":
+                    logger.warning(f"Period '{period}' adjusted for {interval} interval. Using '30d'.")
+                    period = "30d"
+                else:
+                    logger.warning(f"Period '{period}' too long for {interval} interval. Adjusting to '60d'.")
+                    period = "60d"
         elif interval == "1h":
             # 1-hour data is limited to 730 days (about 2 years)
             long_periods = ["5y", "10y", "max"]
@@ -142,11 +205,260 @@ class StockDataFetcher:
         
         return results
     
+    def fetch_multiple_stocks_concurrent(self, 
+                                       symbols: List[str], 
+                                       period: str = "2y", 
+                                       interval: str = "1d",
+                                       max_workers: Optional[int] = None) -> Dict[str, pd.DataFrame]:
+        """Fetch data for multiple stocks concurrently for faster performance
+        
+        Args:
+            symbols: List of stock symbols
+            period: Data period
+            interval: Data interval
+            max_workers: Maximum number of concurrent workers (defaults to class setting)
+        
+        Returns:
+            Dictionary mapping symbols to their data
+        """
+        start_time = time.time()
+        if max_workers is None:
+            max_workers = self.max_workers
+            
+        results = {}
+        
+        # First, check cache for all symbols to avoid unnecessary API calls
+        uncached_symbols = []
+        cached_count = 0
+        for symbol in symbols:
+            period_adj, interval_adj = self.validate_period_interval(period, interval)
+            cache_path = self.get_cache_path(symbol, period_adj, interval_adj)
+            
+            if self.is_cache_valid(cache_path):
+                try:
+                    with open(cache_path, 'rb') as f:
+                        data = pickle.load(f)
+                    results[symbol] = data
+                    cached_count += 1
+                    logger.info(f"Loaded {symbol} from cache")
+                except Exception as e:
+                    logger.warning(f"Failed to load cache for {symbol}: {e}")
+                    uncached_symbols.append(symbol)
+            else:
+                uncached_symbols.append(symbol)
+        
+        # Fetch uncached symbols concurrently
+        if uncached_symbols:
+            logger.info(f"Fetching {len(uncached_symbols)} symbols concurrently with {max_workers} workers")
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all fetch tasks
+                future_to_symbol = {
+                    executor.submit(self.fetch_stock_data, symbol, period, interval): symbol 
+                    for symbol in uncached_symbols
+                }
+                
+                # Collect results as they complete
+                for future in concurrent.futures.as_completed(future_to_symbol):
+                    symbol = future_to_symbol[future]
+                    try:
+                        data = future.result(timeout=30)  # 30 second timeout per symbol
+                        results[symbol] = data
+                    except Exception as e:
+                        logger.error(f"Failed to fetch {symbol}: {e}")
+                        continue
+        
+        # Record performance metrics
+        fetch_time = time.time() - start_time
+        total_data_points = sum(len(df) for df in results.values() if not df.empty)
+        
+        performance_monitor.record_fetch(
+            symbols=symbols,
+            fetch_time=fetch_time,
+            cache_hits=cached_count,
+            cache_misses=len(uncached_symbols),
+            method_used="concurrent_fetch",
+            data_points=total_data_points
+        )
+        
+        logger.info(f"Concurrent fetch completed: {len(results)}/{len(symbols)} symbols in {fetch_time:.2f}s")
+        return results
+    
+    def fetch_batch_yfinance(self, symbols: List[str], period: str = "2y", interval: str = "1d") -> Dict[str, pd.DataFrame]:
+        """Fetch multiple symbols in a single yfinance call for maximum efficiency
+        
+        Args:
+            symbols: List of stock symbols (max 10-15 for best performance)
+            period: Data period
+            interval: Data interval
+        
+        Returns:
+            Dictionary mapping symbols to their data
+        """
+        if len(symbols) > 15:
+            logger.warning(f"Batch size {len(symbols)} is large, consider splitting for better performance")
+        
+        start_time = time.time()
+        period, interval = self.validate_period_interval(period, interval)
+        
+        try:
+            # Use yfinance download for batch fetching
+            logger.info(f"Batch fetching {len(symbols)} symbols: {', '.join(symbols)}")
+            
+            # Create ticker string
+            ticker_string = ' '.join(symbols)
+            
+            # Fetch all data at once
+            batch_data = yf.download(
+                ticker_string,
+                period=period,
+                interval=interval,
+                group_by='ticker',
+                auto_adjust=True,
+                prepost=True,
+                threads=True,
+                progress=False
+            )
+            
+            results = {}
+            
+            if len(symbols) == 1:
+                # Single symbol case
+                symbol = symbols[0]
+                if not batch_data.empty:
+                    results[symbol] = batch_data
+                    # Cache the result
+                    cache_path = self.get_cache_path(symbol, period, interval)
+                    with open(cache_path, 'wb') as f:
+                        pickle.dump(batch_data, f)
+            else:
+                # Multiple symbols case
+                for symbol in symbols:
+                    try:
+                        if symbol in batch_data.columns.levels[0]:
+                            symbol_data = batch_data[symbol]
+                            if not symbol_data.empty:
+                                results[symbol] = symbol_data
+                                # Cache individual results
+                                cache_path = self.get_cache_path(symbol, period, interval)
+                                with open(cache_path, 'wb') as f:
+                                    pickle.dump(symbol_data, f)
+                                logger.info(f"Cached {symbol} data")
+                    except Exception as e:
+                        logger.warning(f"Failed to process {symbol} from batch: {e}")
+                        continue
+            
+            # Record performance metrics
+            fetch_time = time.time() - start_time
+            total_data_points = sum(len(df) for df in results.values() if not df.empty)
+            
+            performance_monitor.record_fetch(
+                symbols=symbols,
+                fetch_time=fetch_time,
+                cache_hits=0,  # No cache hits in this method
+                cache_misses=len(symbols),
+                method_used="batch_yfinance",
+                data_points=total_data_points
+            )
+            
+            logger.info(f"Successfully fetched {len(results)} out of {len(symbols)} symbols in {fetch_time:.2f}s")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Batch fetch failed: {e}")
+            # Fallback to individual fetching
+            logger.info("Falling back to individual symbol fetching")
+            return self.fetch_multiple_stocks_concurrent(symbols, period, interval)
+    
+    def smart_fetch_multiple_stocks(self, 
+                                  symbols: List[str], 
+                                  period: str = "2y", 
+                                  interval: str = "1d",
+                                  batch_size: int = 10) -> Dict[str, pd.DataFrame]:
+        """Intelligently fetch multiple stocks using optimal strategy
+        
+        This method combines caching, batching, and concurrent fetching for maximum performance.
+        
+        Args:
+            symbols: List of stock symbols
+            period: Data period
+            interval: Data interval
+            batch_size: Size of batches for batch fetching
+        
+        Returns:
+            Dictionary mapping symbols to their data
+        """
+        start_time = time.time()
+        logger.info(f"Smart fetching {len(symbols)} symbols with batch size {batch_size}")
+        
+        results = {}
+        remaining_symbols = symbols.copy()
+        
+        # Step 1: Load from cache first
+        cached_symbols = []
+        for symbol in symbols:
+            period_adj, interval_adj = self.validate_period_interval(period, interval)
+            cache_path = self.get_cache_path(symbol, period_adj, interval_adj)
+            
+            if self.is_cache_valid(cache_path):
+                try:
+                    with open(cache_path, 'rb') as f:
+                        data = pickle.load(f)
+                    results[symbol] = data
+                    cached_symbols.append(symbol)
+                    logger.debug(f"Loaded {symbol} from cache")
+                except Exception as e:
+                    logger.warning(f"Failed to load cache for {symbol}: {e}")
+        
+        # Remove cached symbols from remaining
+        remaining_symbols = [s for s in remaining_symbols if s not in cached_symbols]
+        logger.info(f"Loaded {len(cached_symbols)} symbols from cache, {len(remaining_symbols)} remaining")
+        
+        # Step 2: Batch fetch remaining symbols
+        if remaining_symbols:
+            # Split into batches
+            batches = [remaining_symbols[i:i + batch_size] for i in range(0, len(remaining_symbols), batch_size)]
+            
+            for i, batch in enumerate(batches):
+                logger.info(f"Processing batch {i+1}/{len(batches)} with {len(batch)} symbols")
+                
+                try:
+                    batch_results = self.fetch_batch_yfinance(batch, period, interval)
+                    results.update(batch_results)
+                    
+                    # Small delay between batches to be respectful to the API
+                    if i < len(batches) - 1:  # Don't sleep after the last batch
+                        time.sleep(0.5)
+                        
+                except Exception as e:
+                    logger.error(f"Batch {i+1} failed: {e}")
+                    # Fallback to concurrent individual fetching for this batch
+                    logger.info(f"Falling back to concurrent fetching for batch {i+1}")
+                    batch_results = self.fetch_multiple_stocks_concurrent(batch, period, interval)
+                    results.update(batch_results)
+        
+        # Record performance metrics
+        fetch_time = time.time() - start_time
+        total_data_points = sum(len(df) for df in results.values() if not df.empty)
+        
+        performance_monitor.record_fetch(
+            symbols=symbols,
+            fetch_time=fetch_time,
+            cache_hits=len(cached_symbols),
+            cache_misses=len(remaining_symbols),
+            method_used="smart_fetch",
+            data_points=total_data_points
+        )
+        
+        logger.info(f"Smart fetch completed: {len(results)}/{len(symbols)} symbols retrieved in {fetch_time:.2f}s")
+        return results
+    
     def get_price_data(self, 
                       symbols: List[str], 
                       column: str = 'Close',
                       period: str = "2y", 
-                      interval: str = "1d") -> pd.DataFrame:
+                      interval: str = "1d",
+                      use_smart_fetch: bool = True) -> pd.DataFrame:
         """Get specific price column for multiple stocks as a DataFrame
         
         Args:
@@ -154,11 +466,16 @@ class StockDataFetcher:
             column: Price column to extract ('Open', 'High', 'Low', 'Close', 'Volume')
             period: Data period
             interval: Data interval
+            use_smart_fetch: Whether to use optimized smart fetching (recommended)
         
         Returns:
             DataFrame with symbols as columns and dates as index
         """
-        stock_data = self.fetch_multiple_stocks(symbols, period, interval)
+        # Use optimized fetching method
+        if use_smart_fetch:
+            stock_data = self.smart_fetch_multiple_stocks(symbols, period, interval)
+        else:
+            stock_data = self.fetch_multiple_stocks(symbols, period, interval)
         
         price_data = pd.DataFrame()
         for symbol, data in stock_data.items():

@@ -106,10 +106,10 @@ class LeadLagSystem:
         logger.info(f"Starting full analysis for {len(symbols)} stocks")
         
         try:
-            # Step 1: Fetch data
-            logger.info("Fetching stock data...")
+            # Step 1: Fetch data using optimized method
+            logger.info("Fetching stock data using smart fetch...")
             price_data = self.data_fetcher.get_price_data(
-                symbols, column='Close', period=period, interval=interval
+                symbols, column='Close', period=period, interval=interval, use_smart_fetch=True
             )
             
             if price_data.empty:
@@ -226,6 +226,357 @@ class LeadLagSystem:
             
         except Exception as e:
             logger.error(f"Analysis failed: {e}")
+            raise
+    
+    def find_highest_correlations(self,
+                                 symbols: List[str],
+                                 period: str = "2y",
+                                 interval: str = "1d",
+                                 top_n: int = 10,
+                                 correlation_method: str = "pearson",
+                                 return_method: str = "pct_change",
+                                 min_correlation: float = 0.5,
+                                 lag_days: int = 0,
+                                 enable_monte_carlo: bool = True,
+                                 monte_carlo_iterations: int = 1000,
+                                 enable_bootstrap: bool = True,
+                                 bootstrap_iterations: int = 1000,
+                                 apply_multiple_correction: bool = True,
+                                 save_results: bool = True,
+                                 enable_detrending: bool = False,
+                                 detrend_method: str = "linear",
+                                 enable_market_adjustment: bool = False,
+                                 market_index: str = "SPY",
+                                 market_adjustment_method: str = "beta_adjust",
+                                 enable_normalization: bool = False,
+                                 normalization_method: str = "zscore") -> Dict:
+        """Find stocks with highest correlations in a given universe
+        
+        Args:
+            symbols: List of stock symbols to analyze
+            period: Data period to fetch
+            interval: Data interval
+            top_n: Number of top correlated pairs to return
+            correlation_method: Correlation method ('pearson' or 'spearman')
+            return_method: Return calculation method
+            min_correlation: Minimum absolute correlation threshold
+            lag_days: Specific lag to analyze (0 for contemporaneous)
+            enable_monte_carlo: Whether to perform Monte Carlo testing
+            monte_carlo_iterations: Number of Monte Carlo iterations
+            enable_bootstrap: Whether to calculate bootstrap confidence intervals
+            bootstrap_iterations: Number of bootstrap samples
+            save_results: Whether to save results to files
+        
+        Returns:
+            Dictionary with correlation analysis results
+        """
+        logger.info(f"Finding highest correlations among {len(symbols)} stocks")
+        
+        try:
+            # Step 1: Fetch data using optimized method
+            logger.info("Fetching stock data using smart fetch...")
+            price_data = self.data_fetcher.get_price_data(
+                symbols, column='Close', period=period, interval=interval, use_smart_fetch=True
+            )
+            
+            if price_data.empty:
+                raise ValueError("No price data retrieved")
+            
+            logger.info(f"Retrieved data for {len(price_data.columns)} stocks, {len(price_data)} observations")
+            
+            # Step 2: Apply data transformations
+            if enable_detrending:
+                logger.info(f"Applying {detrend_method} detrending...")
+                price_data = self.data_fetcher.detrend_data(price_data, method=detrend_method)
+            
+            if enable_market_adjustment:
+                logger.info(f"Applying market adjustment using {market_index}...")
+                price_data = self.data_fetcher.adjust_for_market(price_data, market_index, method=market_adjustment_method)
+            
+            if enable_normalization:
+                logger.info(f"Applying {normalization_method} normalization...")
+                price_data = self.data_fetcher.normalize_data(price_data, method=normalization_method)
+            
+            # Step 3: Configure analyzer
+            self.analyzer.enable_monte_carlo = enable_monte_carlo
+            self.analyzer.monte_carlo_iterations = monte_carlo_iterations
+            self.analyzer.enable_bootstrap = enable_bootstrap
+            self.analyzer.bootstrap_iterations = bootstrap_iterations
+            self.analyzer.apply_multiple_correction = apply_multiple_correction
+            
+            # Step 4: Find highest correlations
+            logger.info("Analyzing correlations...")
+            correlation_results = self.analyzer.find_highest_correlations(
+                price_data,
+                top_n=top_n,
+                method=correlation_method,
+                return_method=return_method,
+                min_correlation=min_correlation,
+                lag_days=lag_days
+            )
+            
+            if correlation_results.empty:
+                logger.warning(f"No correlations found above threshold {min_correlation}")
+                return {"message": f"No correlations found above threshold {min_correlation}"}
+            
+            logger.info(f"Found {len(correlation_results)} highly correlated pairs")
+            
+            # Step 5: Create summary statistics
+            summary = {
+                'total_pairs_analyzed': len(symbols) * (len(symbols) - 1) // 2,
+                'pairs_above_threshold': len(correlation_results),
+                'highest_correlation': correlation_results.iloc[0]['correlation'] if not correlation_results.empty else None,
+                'average_correlation': correlation_results['correlation'].mean() if not correlation_results.empty else None,
+                'significant_pairs': len(correlation_results[correlation_results['is_significant']]) if not correlation_results.empty else 0,
+                'method': correlation_method,
+                'lag_days': lag_days,
+                'min_correlation_threshold': min_correlation
+            }
+            
+            # Step 6: Compile final results
+            final_results = {
+                'correlation_summary': summary,
+                'correlation_results': correlation_results,
+                'price_data': price_data,
+                'parameters': {
+                    'symbols': symbols,
+                    'period': period,
+                    'interval': interval,
+                    'top_n': top_n,
+                    'correlation_method': correlation_method,
+                    'return_method': return_method,
+                    'min_correlation': min_correlation,
+                    'lag_days': lag_days,
+                    'enable_detrending': enable_detrending,
+                    'detrend_method': detrend_method,
+                    'enable_market_adjustment': enable_market_adjustment,
+                    'market_index': market_index,
+                    'market_adjustment_method': market_adjustment_method,
+                    'enable_normalization': enable_normalization,
+                    'normalization_method': normalization_method
+                }
+            }
+            
+            # Step 7: Save results
+            if save_results:
+                self._save_correlation_results(final_results)
+            
+            logger.info("Correlation analysis completed successfully")
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"Correlation analysis failed: {e}")
+            raise
+    
+    def enhanced_correlation_discovery(self,
+                                     symbols: List[str],
+                                     period: str = "2y",
+                                     interval: str = "1d",
+                                     time_horizons: List[int] = [1, 5, 10, 20],
+                                     lag_periods: List[int] = [0, 1, 2, 3, 5],
+                                     top_n: int = 10,
+                                     correlation_method: str = "pearson",
+                                     return_method: str = "pct_change",
+                                     min_correlation: float = 0.3,
+                                     enable_monte_carlo: bool = True,
+                                     monte_carlo_iterations: int = 1000,
+                                     enable_bootstrap: bool = True,
+                                     bootstrap_iterations: int = 1000,
+                                     apply_multiple_correction: bool = True,
+                                     save_results: bool = True,
+                                     enable_detrending: bool = False,
+                                     detrend_method: str = "linear",
+                                     enable_market_adjustment: bool = False,
+                                     market_index: str = "SPY",
+                                     market_adjustment_method: str = "beta_adjust",
+                                     enable_normalization: bool = True,
+                                     normalization_method: str = "zscore") -> Dict:
+        """Enhanced correlation discovery with time horizons and lagging analysis
+        
+        This function compares stocks within a defined universe across multiple time horizons
+        and lagging periods, ranking results by highest correlation.
+        
+        Args:
+            symbols: List of stock symbols to analyze
+            period: Data period to fetch
+            interval: Data interval
+            time_horizons: List of time horizons (in days) to analyze
+            lag_periods: List of lag periods (in days) to test
+            top_n: Number of top correlated pairs to return per combination
+            correlation_method: Correlation method ('pearson' or 'spearman')
+            return_method: Return calculation method
+            min_correlation: Minimum absolute correlation threshold
+            enable_monte_carlo: Whether to perform Monte Carlo testing
+            monte_carlo_iterations: Number of Monte Carlo iterations
+            enable_bootstrap: Whether to calculate bootstrap confidence intervals
+            bootstrap_iterations: Number of bootstrap samples
+            apply_multiple_correction: Apply multiple comparison correction
+            save_results: Whether to save results to files
+            enable_detrending: Enable data detrending
+            detrend_method: Detrending method
+            enable_market_adjustment: Enable market adjustment
+            market_index: Market benchmark index
+            market_adjustment_method: Market adjustment method
+            enable_normalization: Enable data normalization
+            normalization_method: Normalization method
+        
+        Returns:
+            Dictionary with enhanced correlation analysis results
+        """
+        logger.info(f"Running enhanced correlation discovery for {len(symbols)} stocks")
+        logger.info(f"Time horizons: {time_horizons}, Lag periods: {lag_periods}")
+        
+        try:
+            # Step 1: Fetch data using optimized method
+            logger.info("Fetching stock data using smart fetch...")
+            price_data = self.data_fetcher.get_price_data(
+                symbols, column='Close', period=period, interval=interval, use_smart_fetch=True
+            )
+            
+            if price_data.empty:
+                raise ValueError("No price data retrieved")
+            
+            logger.info(f"Retrieved data for {len(price_data.columns)} stocks, {len(price_data)} observations")
+            
+            # Step 2: Apply data transformations
+            if enable_detrending:
+                logger.info(f"Applying {detrend_method} detrending...")
+                price_data = self.data_fetcher.detrend_data(price_data, method=detrend_method)
+            
+            if enable_market_adjustment:
+                logger.info(f"Applying market adjustment using {market_index}...")
+                price_data = self.data_fetcher.adjust_for_market(price_data, market_index, method=market_adjustment_method)
+            
+            if enable_normalization:
+                logger.info(f"Applying {normalization_method} normalization...")
+                price_data = self.data_fetcher.normalize_data(price_data, method=normalization_method)
+            
+            # Step 3: Configure analyzer
+            self.analyzer.enable_monte_carlo = enable_monte_carlo
+            self.analyzer.monte_carlo_iterations = monte_carlo_iterations
+            self.analyzer.enable_bootstrap = enable_bootstrap
+            self.analyzer.bootstrap_iterations = bootstrap_iterations
+            self.analyzer.apply_multiple_correction = apply_multiple_correction
+            
+            # Step 4: Run enhanced correlation discovery across time horizons and lags
+            all_results = []
+            horizon_summaries = {}
+            
+            for horizon in time_horizons:
+                logger.info(f"Analyzing time horizon: {horizon} days")
+                horizon_results = []
+                
+                # Calculate returns for this time horizon
+                if horizon == 1:
+                    horizon_data = price_data
+                else:
+                    # Use rolling windows for longer horizons
+                    horizon_data = price_data.rolling(window=horizon).mean().dropna()
+                
+                for lag in lag_periods:
+                    logger.info(f"  Testing lag period: {lag} days")
+                    
+                    # Find correlations for this horizon-lag combination
+                    correlation_results = self.analyzer.find_highest_correlations(
+                        horizon_data,
+                        top_n=top_n,
+                        method=correlation_method,
+                        return_method=return_method,
+                        min_correlation=min_correlation,
+                        lag_days=lag
+                    )
+                    
+                    if not correlation_results.empty:
+                        # Add horizon and lag information
+                        correlation_results['time_horizon'] = horizon
+                        correlation_results['lag_period'] = lag
+                        correlation_results['horizon_lag_combo'] = f"{horizon}d_lag{lag}"
+                        
+                        horizon_results.append(correlation_results)
+                        all_results.append(correlation_results)
+                
+                # Create summary for this horizon
+                if horizon_results:
+                    combined_horizon = pd.concat(horizon_results, ignore_index=True)
+                    horizon_summaries[f"{horizon}d"] = {
+                        'total_pairs': len(combined_horizon),
+                        'avg_correlation': combined_horizon['correlation'].mean(),
+                        'max_correlation': combined_horizon['correlation'].max(),
+                        'significant_pairs': len(combined_horizon[combined_horizon['is_significant']]) if 'is_significant' in combined_horizon.columns else 0,
+                        'best_lag': combined_horizon.loc[combined_horizon['correlation'].idxmax(), 'lag_period'] if not combined_horizon.empty else None
+                    }
+            
+            # Step 5: Combine and rank all results
+            if all_results:
+                final_results = pd.concat(all_results, ignore_index=True)
+                
+                # Sort by correlation strength (absolute value)
+                final_results['abs_correlation'] = final_results['correlation'].abs()
+                final_results = final_results.sort_values('abs_correlation', ascending=False)
+                
+                # Get top N overall results
+                top_results = final_results.head(top_n * 2)  # Get more results for variety
+                
+                logger.info(f"Found {len(final_results)} total correlation combinations")
+            else:
+                final_results = pd.DataFrame()
+                top_results = pd.DataFrame()
+                logger.warning("No correlations found above threshold")
+            
+            # Step 6: Create comprehensive summary
+            summary = {
+                'total_combinations_analyzed': len(time_horizons) * len(lag_periods) * len(symbols) * (len(symbols) - 1) // 2,
+                'total_pairs_found': len(final_results) if not final_results.empty else 0,
+                'time_horizons_tested': time_horizons,
+                'lag_periods_tested': lag_periods,
+                'horizon_summaries': horizon_summaries,
+                'overall_stats': {
+                    'highest_correlation': final_results['correlation'].max() if not final_results.empty else None,
+                    'average_correlation': final_results['correlation'].mean() if not final_results.empty else None,
+                    'best_horizon_lag_combo': final_results.loc[final_results['correlation'].idxmax(), 'horizon_lag_combo'] if not final_results.empty else None,
+                    'most_frequent_horizon': final_results['time_horizon'].mode().iloc[0] if not final_results.empty and not final_results['time_horizon'].mode().empty else None,
+                    'most_frequent_lag': final_results['lag_period'].mode().iloc[0] if not final_results.empty and not final_results['lag_period'].mode().empty else None
+                },
+                'method': correlation_method,
+                'min_correlation_threshold': min_correlation
+            }
+            
+            # Step 7: Compile final results
+            enhanced_results = {
+                'summary': summary,
+                'correlation_results': top_results,
+                'all_results': final_results,
+                'horizon_breakdown': horizon_summaries,
+                'price_data': price_data,
+                'parameters': {
+                    'symbols': symbols,
+                    'period': period,
+                    'interval': interval,
+                    'time_horizons': time_horizons,
+                    'lag_periods': lag_periods,
+                    'top_n': top_n,
+                    'correlation_method': correlation_method,
+                    'return_method': return_method,
+                    'min_correlation': min_correlation,
+                    'enable_detrending': enable_detrending,
+                    'detrend_method': detrend_method,
+                    'enable_market_adjustment': enable_market_adjustment,
+                    'market_index': market_index,
+                    'market_adjustment_method': market_adjustment_method,
+                    'enable_normalization': enable_normalization,
+                    'normalization_method': normalization_method
+                }
+            }
+            
+            # Step 8: Save results
+            if save_results:
+                self._save_enhanced_correlation_results(enhanced_results)
+            
+            logger.info("Enhanced correlation discovery completed successfully")
+            return enhanced_results
+            
+        except Exception as e:
+            logger.error(f"Enhanced correlation discovery failed: {e}")
             raise
     
     def _run_backtests(self, 
@@ -398,6 +749,75 @@ class LeadLagSystem:
             
         except Exception as e:
             logger.error(f"Failed to save results: {e}")
+    
+    def _save_correlation_results(self, results: Dict) -> None:
+        """Save correlation analysis results to files"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Save correlation results as CSV
+            if not results['correlation_results'].empty:
+                results['correlation_results'].to_csv(
+                    self.output_dir / f"correlation_results_{timestamp}.csv", 
+                    index=False
+                )
+            
+            # Save summary as JSON
+            summary_data = {
+                'correlation_summary': results['correlation_summary'],
+                'parameters': results['parameters'],
+                'timestamp': timestamp
+            }
+            
+            with open(self.output_dir / f"correlation_summary_{timestamp}.json", 'w') as f:
+                json.dump(summary_data, f, indent=2, default=str)
+            
+            logger.info(f"Correlation results saved to {self.output_dir}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save correlation results: {e}")
+    
+    def _save_enhanced_correlation_results(self, results: Dict) -> None:
+        """Save enhanced correlation analysis results to files"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Save enhanced correlation results as CSV
+            if not results['correlation_results'].empty:
+                results['correlation_results'].to_csv(
+                    self.output_dir / f"enhanced_correlation_results_{timestamp}.csv", 
+                    index=False
+                )
+            
+            # Save all results (including horizon breakdown) as CSV
+            if not results['all_results'].empty:
+                results['all_results'].to_csv(
+                    self.output_dir / f"enhanced_correlation_all_results_{timestamp}.csv", 
+                    index=False
+                )
+            
+            # Save horizon breakdown as separate CSVs
+            for horizon, horizon_data in results['horizon_breakdown'].items():
+                horizon_df = pd.DataFrame([horizon_data])
+                horizon_df.to_csv(
+                    self.output_dir / f"enhanced_correlation_horizon_{horizon}_{timestamp}.csv",
+                    index=False
+                )
+            
+            # Save comprehensive summary as JSON
+            summary_data = {
+                'summary': results['summary'],
+                'parameters': results['parameters'],
+                'timestamp': timestamp
+            }
+            
+            with open(self.output_dir / f"enhanced_correlation_summary_{timestamp}.json", 'w') as f:
+                json.dump(summary_data, f, indent=2, default=str)
+            
+            logger.info(f"Enhanced correlation results saved to {self.output_dir}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save enhanced correlation results: {e}")
     
     def print_summary(self, results: Dict) -> None:
         """Print a formatted summary of results"""
