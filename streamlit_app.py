@@ -1566,7 +1566,7 @@ def main():
             with col3:
                 st.metric(
                     "Best Overall Correlation",
-                    f"{overall_stats.get('highest_correlation', 0):.3f}"
+                    f"{overall_stats.get('highest_correlation', 0) or 0:.3f}"
                 )
             
             with col4:
@@ -1622,8 +1622,8 @@ def main():
                     for horizon, data in horizon_data.items():
                         horizon_summary.append({
                             'Time Horizon': horizon,
-                            'Top Correlation': f"{data.get('max_correlation', 0):.4f}",
-                            'Average Correlation': f"{data.get('avg_correlation', 0):.4f}",
+                            'Top Correlation': f"{data.get('max_correlation', 0) or 0:.4f}",
+                'Average Correlation': f"{data.get('avg_correlation', 0) or 0:.4f}",
                             'Correlations Found': data.get('total_pairs', 0),
                             'Best Lag Period': f"{data.get('best_lag', 0)} days"
                         })
@@ -1635,8 +1635,8 @@ def main():
                     fig = go.Figure()
                     
                     horizons = list(horizon_data.keys())
-                    top_correlations = [horizon_data[h].get('max_correlation', 0) for h in horizons]
-                    avg_correlations = [horizon_data[h].get('avg_correlation', 0) for h in horizons]
+                    top_correlations = [horizon_data[h].get('max_correlation', 0) or 0 for h in horizons]
+                    avg_correlations = [horizon_data[h].get('avg_correlation', 0) or 0 for h in horizons]
                     
                     fig.add_trace(go.Bar(
                         x=horizons,
