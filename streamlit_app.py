@@ -1622,10 +1622,10 @@ def main():
                     for horizon, data in horizon_data.items():
                         horizon_summary.append({
                             'Time Horizon': horizon,
-                            'Top Correlation': f"{data.get('top_correlation', 0):.4f}",
+                            'Top Correlation': f"{data.get('max_correlation', 0):.4f}",
                             'Average Correlation': f"{data.get('avg_correlation', 0):.4f}",
-                            'Correlations Found': data.get('correlations_found', 0),
-                            'Best Lag Period': f"{data.get('best_lag_period', 0)} days"
+                            'Correlations Found': data.get('total_pairs', 0),
+                            'Best Lag Period': f"{data.get('best_lag', 0)} days"
                         })
                     
                     horizon_df = pd.DataFrame(horizon_summary)
@@ -1635,7 +1635,7 @@ def main():
                     fig = go.Figure()
                     
                     horizons = list(horizon_data.keys())
-                    top_correlations = [horizon_data[h].get('top_correlation', 0) for h in horizons]
+                    top_correlations = [horizon_data[h].get('max_correlation', 0) for h in horizons]
                     avg_correlations = [horizon_data[h].get('avg_correlation', 0) for h in horizons]
                     
                     fig.add_trace(go.Bar(
