@@ -654,6 +654,55 @@ class LeadLagAnalyzer:
         summary['most_predictive_pairs'] = results_df.nlargest(5, sort_column)[top_pairs_cols].to_dict('records')
         
         return summary
+    
+    def summarize_results(self, results_df: pd.DataFrame, apply_correction: bool = True) -> pd.DataFrame:
+        """Apply post-processing to analysis results
+        
+        Args:
+            results_df: Results DataFrame from analyze_multiple_pairs
+            apply_correction: Whether to apply multiple comparison correction
+        
+        Returns:
+            Processed DataFrame with corrections applied
+        """
+        if results_df.empty:
+            return results_df
+        
+        results_copy = results_df.copy()
+        
+        # Apply multiple comparison correction if requested
+        if apply_correction and len(results_copy) > 1:
+            try:
+                # Use adjusted p-values if they exist, otherwise use original p-values
+                p_values = results_copy.get('adjusted_p_value', results_copy['p_value']).values
+                
+                # Benjamini-Hochberg FDR correction
+                rejected, adjusted_p_values, _, _ = multipletests(
+                    p_values, 
+                    alpha=0.05, 
+                    method='fdr_bh'
+                )
+                
+                results_copy['adjusted_p_value'] = adjusted_p_values
+                results_copy['is_significant_adjusted'] = rejected
+                
+                self.logger.info(f"Applied multiple comparison correction: {sum(rejected)}/{len(rejected)} relationships remain significant")
+                
+            except Exception as e:
+                self.logger.warning(f"Multiple comparison correction failed: {e}")
+                # Fallback: use original values
+                if 'adjusted_p_value' not in results_copy.columns:
+                    results_copy['adjusted_p_value'] = results_copy['p_value']
+                if 'is_significant_adjusted' not in results_copy.columns:
+                    results_copy['is_significant_adjusted'] = results_copy['is_significant']
+        else:
+            # No correction needed or requested
+            if 'adjusted_p_value' not in results_copy.columns:
+                results_copy['adjusted_p_value'] = results_copy['p_value']
+            if 'is_significant_adjusted' not in results_copy.columns:
+                results_copy['is_significant_adjusted'] = results_copy['is_significant']
+        
+        return results_copy
 
 # Example usage
 if __name__ == "__main__":
