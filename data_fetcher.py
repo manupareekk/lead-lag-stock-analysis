@@ -31,6 +31,36 @@ class StockDataFetcher:
         file_age = datetime.now() - datetime.fromtimestamp(cache_path.stat().st_mtime)
         return file_age < timedelta(hours=max_age_hours)
     
+    def validate_period_interval(self, period: str, interval: str) -> Tuple[str, str]:
+        """Validate and adjust period-interval combinations based on Yahoo Finance limits
+        
+        Args:
+            period: Requested data period
+            interval: Requested data interval
+            
+        Returns:
+            Tuple of (validated_period, validated_interval)
+        """
+        # Yahoo Finance API limitations
+        if interval == "1m":
+            # 1-minute data is limited to 7 days
+            if period not in ["1d", "2d", "5d", "7d"]:
+                logger.warning(f"1m interval limited to 7 days max. Adjusting period from {period} to 7d")
+                period = "7d"
+        elif interval in ["5m", "15m", "30m"]:
+            # Sub-hourly data: maximum 60 days
+            if period in ["6mo", "1y", "2y", "5y", "max"]:
+                logger.warning(f"Period '{period}' too long for {interval} interval. Adjusting to '60d'.")
+                period = "60d"
+        elif interval == "1h":
+            # 1-hour data is limited to 730 days (about 2 years)
+            long_periods = ["5y", "10y", "max"]
+            if period in long_periods:
+                logger.warning(f"1h interval limited to ~2 years. Adjusting period from {period} to 2y")
+                period = "2y"
+        
+        return period, interval
+    
     def fetch_stock_data(self, 
                         symbol: str, 
                         period: str = "2y", 
@@ -40,13 +70,16 @@ class StockDataFetcher:
         
         Args:
             symbol: Stock symbol (e.g., 'AAPL', 'MSFT')
-            period: Data period ('1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
+            period: Data period ('1d', '5d', '1w', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
             interval: Data interval ('1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo')
             use_cache: Whether to use cached data
         
         Returns:
             DataFrame with OHLCV data
         """
+        # Validate and adjust period-interval combination
+        period, interval = self.validate_period_interval(period, interval)
+        
         cache_path = self.get_cache_path(symbol, period, interval)
         
         # Try to load from cache first

@@ -341,23 +341,56 @@ def main():
     st.sidebar.subheader("Data Parameters")
     period = st.sidebar.selectbox(
         "Data Period:",
-        options=["1y", "2y", "5y", "max"],
-        index=1
+        options=["1w", "1mo", "6mo", "1y", "2y", "5y", "max"],
+        index=3,  # Default to 1y
+        help="Time period for historical data analysis"
     )
     
     interval = st.sidebar.selectbox(
         "Data Interval:",
-        options=["1d", "1wk", "1mo"],
-        index=0
+        options=["1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"],
+        index=5,  # Default to 1d
+        help="Granularity of price data (high-frequency intervals limited to shorter periods)"
     )
+    
+    # Show warning for high-frequency data with long periods
+    if interval in ["1m", "5m", "15m", "30m", "1h"] and period in ["2y", "5y", "max"]:
+        st.sidebar.warning(
+            "⚠️ High-frequency data (1m-1h) is only available for shorter periods. "
+            "Yahoo Finance limits: 1m data ≤ 7 days, sub-hourly data ≤ 60 days, 1h data ≤ 730 days."
+        )
     
     # Analysis parameters
     st.sidebar.subheader("📈 Analysis Parameters")
+    
+    # Adjust lag parameters based on interval
+    if interval == "1m":
+        lag_unit = "minutes"
+        max_lag_default = 30  # 30 minutes
+        max_lag_max = 120     # 2 hours in minutes
+        lag_help = "Maximum lag in minutes for 1-minute data"
+    elif interval in ["5m", "15m", "30m"]:
+        lag_unit = "minutes"
+        max_lag_default = 120  # 2 hours in minutes
+        max_lag_max = 720      # 12 hours in minutes
+        lag_help = f"Maximum lag in minutes for {interval} data"
+    elif interval == "1h":
+        lag_unit = "hours"
+        max_lag_default = 24  # 1 day in hours
+        max_lag_max = 168     # 1 week in hours
+        lag_help = "Maximum lag in hours for 1-hour data"
+    else:
+        lag_unit = "days"
+        max_lag_default = 10
+        max_lag_max = 30
+        lag_help = "Maximum lag in days for daily+ data"
+    
     max_lag = st.sidebar.slider(
-        "Maximum Lag (days):",
+        f"Maximum Lag ({lag_unit}):",
         min_value=1,
-        max_value=30,
-        value=10
+        max_value=max_lag_max,
+        value=max_lag_default,
+        help=lag_help
     )
     
     min_correlation = st.sidebar.slider(
@@ -419,13 +452,44 @@ def main():
         help="Analyze correlation stability over time using rolling windows"
     )
     
+    # Adjust rolling window parameters based on interval
+    if interval == "1m":
+        window_unit = "minutes"
+        window_default = 120   # 2 hours in minutes
+        window_min = 30        # 30 minutes
+        window_max = 480       # 8 hours
+        window_step = 30
+        window_help = "Rolling window size in minutes for stability analysis"
+    elif interval in ["5m", "15m", "30m"]:
+        window_unit = "minutes"
+        window_default = 240   # 4 hours in minutes
+        window_min = 60        # 1 hour
+        window_max = 720       # 12 hours
+        window_step = 30
+        window_help = f"Rolling window size in minutes for {interval} data stability analysis"
+    elif interval == "1h":
+        window_unit = "hours"
+        window_default = 168   # 1 week in hours
+        window_min = 24        # 1 day
+        window_max = 720       # 1 month
+        window_step = 24
+        window_help = "Rolling window size in hours for stability analysis"
+    else:
+        window_unit = "days"
+        window_default = 252   # 1 trading year
+        window_min = 50
+        window_max = 500
+        window_step = 10
+        window_help = "Rolling window size in days for stability analysis"
+    
     rolling_window_size = st.sidebar.slider(
-        "Rolling Window Size (days):",
-        min_value=50,
-        max_value=500,
-        value=252,
-        step=10,
-        disabled=not enable_rolling_analysis
+        f"Rolling Window Size ({window_unit}):",
+        min_value=window_min,
+        max_value=window_max,
+        value=window_default,
+        step=window_step,
+        disabled=not enable_rolling_analysis,
+        help=window_help
     )
     
     apply_multiple_correction = st.sidebar.checkbox(
