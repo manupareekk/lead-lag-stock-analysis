@@ -791,25 +791,12 @@ def main():
         
         st.sidebar.info("🎯 Multi-horizon analysis across different time periods and lag structures")
         
-        # Time horizons selection
-        st.sidebar.markdown("**📅 Time Horizons to Analyze:**")
+        # Time horizons - automatically analyze all available periods
+        st.sidebar.markdown("**📅 Time Horizons Analysis:**")
         available_periods = ["1w", "1mo", "3mo", "6mo", "1y", "2y"]
-        default_horizons = ["1mo", "3mo", "6mo", "1y"]
+        time_horizons = available_periods  # Use all available periods
         
-        time_horizons = []
-        col1, col2 = st.sidebar.columns(2)
-        for i, period_option in enumerate(available_periods):
-            with col1 if i % 2 == 0 else col2:
-                if st.checkbox(
-                    f"{period_option}",
-                    value=period_option in default_horizons,
-                    key=f"horizon_{period_option}"
-                ):
-                    time_horizons.append(period_option)
-        
-        if not time_horizons:
-            st.sidebar.warning("⚠️ Please select at least one time horizon")
-            time_horizons = ["1y"]  # Default fallback
+        st.sidebar.info(f"🔄 Analyzing all {len(time_horizons)} time horizons: {', '.join(time_horizons)}")
         
         # Lag periods selection - dynamic based on interval
         lag_unit = get_time_unit_label(interval)
