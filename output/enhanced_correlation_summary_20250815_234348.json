@@ -1,0 +1,130 @@
+{
+  "summary": {
+    "total_combinations_analyzed": 18375,
+    "total_pairs_found": 32,
+    "time_horizons_tested": [
+      30,
+      90,
+      180
+    ],
+    "lag_periods_tested": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "horizon_summaries": {
+      "30d": {
+        "total_pairs": 16,
+        "avg_correlation": 0.054063993914278644,
+        "max_correlation": 0.8128366290313779,
+        "significant_pairs": 16,
+        "best_lag": "8"
+      },
+      "90d": {
+        "total_pairs": 9,
+        "avg_correlation": 0.08818482600329963,
+        "max_correlation": 0.699409704299328,
+        "significant_pairs": 9,
+        "best_lag": "1"
+      },
+      "180d": {
+        "total_pairs": 7,
+        "avg_correlation": 0.3133392526948095,
+        "max_correlation": 0.9426726670181449,
+        "significant_pairs": 7,
+        "best_lag": "1"
+      }
+    },
+    "overall_stats": {
+      "highest_correlation": 0.9426726670181449,
+      "average_correlation": 0.12037694079755693,
+      "best_horizon_lag_combo": "180d_lag1",
+      "most_frequent_horizon": "30",
+      "most_frequent_lag": "2"
+    },
+    "method": "pearson",
+    "min_correlation_threshold": 0.3
+  },
+  "parameters": {
+    "symbols": [
+      "JNJ",
+      "PFE",
+      "MRK",
+      "ABBV",
+      "LLY",
+      "BMY",
+      "AMGN",
+      "GILD",
+      "BIIB",
+      "VRTX",
+      "REGN",
+      "ILMN",
+      "MRNA",
+      "BNTX",
+      "ZTS",
+      "TAK",
+      "NVO",
+      "SNY",
+      "UNH",
+      "CVS",
+      "CI",
+      "HUM",
+      "CNC",
+      "MOH",
+      "MDT",
+      "ABT",
+      "TMO",
+      "DHR",
+      "SYK",
+      "BSX",
+      "EW",
+      "ISRG",
+      "DXCM",
+      "HOLX",
+      "BDX",
+      "BAX",
+      "ZBH",
+      "ALGN",
+      "IDXX",
+      "IQV",
+      "MTD",
+      "A",
+      "WST",
+      "BMRN",
+      "TECH",
+      "INCY",
+      "EXAS",
+      "IONS",
+      "ALNY",
+      "RARE"
+    ],
+    "period": "2y",
+    "interval": "15m",
+    "time_horizons": [
+      30,
+      90,
+      180
+    ],
+    "lag_periods": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "top_n": 10,
+    "correlation_method": "pearson",
+    "return_method": "pct_change",
+    "min_correlation": 0.3,
+    "enable_detrending": false,
+    "detrend_method": "linear",
+    "enable_market_adjustment": false,
+    "market_index": "SPY",
+    "market_adjustment_method": "beta_adjust",
+    "enable_normalization": true,
+    "normalization_method": "zscore"
+  },
+  "timestamp": "20250815_234348"
+}

@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "total_combinations_analyzed": 30,
+    "total_pairs_found": 0,
+    "time_horizons_tested": [
+      7,
+      30
+    ],
+    "lag_periods_tested": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "horizon_summaries": {},
+    "overall_stats": {
+      "highest_correlation": null,
+      "average_correlation": null,
+      "best_horizon_lag_combo": null,
+      "most_frequent_horizon": null,
+      "most_frequent_lag": null
+    },
+    "method": "pearson",
+    "min_correlation_threshold": 0.3
+  },
+  "parameters": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "GOOGL"
+    ],
+    "period": "2y",
+    "interval": "15m",
+    "time_horizons": [
+      7,
+      30
+    ],
+    "lag_periods": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "top_n": 10,
+    "correlation_method": "pearson",
+    "return_method": "pct_change",
+    "min_correlation": 0.3,
+    "enable_detrending": false,
+    "detrend_method": "linear",
+    "enable_market_adjustment": false,
+    "market_index": "SPY",
+    "market_adjustment_method": "beta_adjust",
+    "enable_normalization": true,
+    "normalization_method": "zscore"
+  },
+  "timestamp": "20250815_234528"
+}

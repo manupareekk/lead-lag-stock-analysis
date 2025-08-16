@@ -113,9 +113,19 @@ class LeadLagSystem:
             )
             
             if price_data.empty:
-                raise ValueError("No price data retrieved")
+                raise ValueError("No price data retrieved for all available stocks for lead lag analysis")
             
-            logger.info(f"Retrieved data for {len(price_data.columns)} stocks, {len(price_data)} observations")
+            # Check if we have enough stocks for meaningful analysis
+            if len(price_data.columns) < 2:
+                raise ValueError(f"Insufficient data: only {len(price_data.columns)} stocks available, need at least 2 for analysis")
+            
+            logger.info(f"Retrieved data for {len(price_data.columns)} stocks out of {len(symbols)} requested, {len(price_data)} observations")
+            
+            # Update symbols list to only include successfully fetched stocks
+            available_symbols = list(price_data.columns)
+            if len(available_symbols) < len(symbols):
+                failed_symbols = [s for s in symbols if s not in available_symbols]
+                logger.warning(f"Continuing analysis with {len(available_symbols)} stocks. Failed to fetch: {failed_symbols}")
             
             # Apply data transformations
             processed_data = price_data.copy()
@@ -128,11 +138,8 @@ class LeadLagSystem:
             # Market adjustment
             if enable_market_adjustment:
                 logger.info(f"Applying market adjustment using {market_index}...")
-                market_data = self.data_fetcher.get_price_data(
-                    [market_index], column='Close', period=period, interval=interval
-                )
                 processed_data = self.data_fetcher.remove_market_effects(
-                    processed_data, market_data[market_index], method=market_adjustment_method
+                    processed_data, market_index=market_index, method=market_adjustment_method
                 )
             
             # Use processed data for analysis
@@ -280,9 +287,19 @@ class LeadLagSystem:
             )
             
             if price_data.empty:
-                raise ValueError("No price data retrieved")
+                raise ValueError("No price data retrieved for all available stocks for correlation analysis")
             
-            logger.info(f"Retrieved data for {len(price_data.columns)} stocks, {len(price_data)} observations")
+            # Check if we have enough stocks for meaningful analysis
+            if len(price_data.columns) < 2:
+                raise ValueError(f"Insufficient data: only {len(price_data.columns)} stocks available, need at least 2 for analysis")
+            
+            logger.info(f"Retrieved data for {len(price_data.columns)} stocks out of {len(symbols)} requested, {len(price_data)} observations")
+            
+            # Update symbols list to only include successfully fetched stocks
+            available_symbols = list(price_data.columns)
+            if len(available_symbols) < len(symbols):
+                failed_symbols = [s for s in symbols if s not in available_symbols]
+                logger.warning(f"Continuing analysis with {len(available_symbols)} stocks. Failed to fetch: {failed_symbols}")
             
             # Step 2: Apply data transformations
             if enable_detrending:
@@ -291,7 +308,7 @@ class LeadLagSystem:
             
             if enable_market_adjustment:
                 logger.info(f"Applying market adjustment using {market_index}...")
-                price_data = self.data_fetcher.adjust_for_market(price_data, market_index, method=market_adjustment_method)
+                price_data = self.data_fetcher.remove_market_effects(price_data, market_index=market_index, method=market_adjustment_method)
             
             if enable_normalization:
                 logger.info(f"Applying {normalization_method} normalization...")
@@ -434,9 +451,19 @@ class LeadLagSystem:
             )
             
             if price_data.empty:
-                raise ValueError("No price data retrieved")
+                raise ValueError("No price data retrieved for all available stocks for enhanced correlation analysis")
             
-            logger.info(f"Retrieved data for {len(price_data.columns)} stocks, {len(price_data)} observations")
+            # Check if we have enough stocks for meaningful analysis
+            if len(price_data.columns) < 2:
+                raise ValueError(f"Insufficient data: only {len(price_data.columns)} stocks available, need at least 2 for analysis")
+            
+            logger.info(f"Retrieved data for {len(price_data.columns)} stocks out of {len(symbols)} requested, {len(price_data)} observations")
+            
+            # Update symbols list to only include successfully fetched stocks
+            available_symbols = list(price_data.columns)
+            if len(available_symbols) < len(symbols):
+                failed_symbols = [s for s in symbols if s not in available_symbols]
+                logger.warning(f"Continuing analysis with {len(available_symbols)} stocks. Failed to fetch: {failed_symbols}")
             
             # Step 2: Apply data transformations
             if enable_detrending:
@@ -445,7 +472,7 @@ class LeadLagSystem:
             
             if enable_market_adjustment:
                 logger.info(f"Applying market adjustment using {market_index}...")
-                price_data = self.data_fetcher.adjust_for_market(price_data, market_index, method=market_adjustment_method)
+                price_data = self.data_fetcher.remove_market_effects(price_data, market_index=market_index, method=market_adjustment_method)
             
             if enable_normalization:
                 logger.info(f"Applying {normalization_method} normalization...")

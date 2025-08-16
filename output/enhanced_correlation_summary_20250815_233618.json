@@ -1,0 +1,139 @@
+{
+  "summary": {
+    "total_combinations_analyzed": 24500,
+    "total_pairs_found": 169,
+    "time_horizons_tested": [
+      30,
+      90,
+      180,
+      365
+    ],
+    "lag_periods_tested": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "horizon_summaries": {
+      "30d": {
+        "total_pairs": 36,
+        "avg_correlation": 0.10544000729837519,
+        "max_correlation": 0.8042790924741133,
+        "significant_pairs": 36,
+        "best_lag": "1"
+      },
+      "90d": {
+        "total_pairs": 43,
+        "avg_correlation": 0.14325020722027043,
+        "max_correlation": 0.9911182150678494,
+        "significant_pairs": 43,
+        "best_lag": "10"
+      },
+      "180d": {
+        "total_pairs": 40,
+        "avg_correlation": 0.4330216704580159,
+        "max_correlation": 0.9935793054964,
+        "significant_pairs": 40,
+        "best_lag": "20"
+      },
+      "365d": {
+        "total_pairs": 50,
+        "avg_correlation": 0.881683359442959,
+        "max_correlation": 0.9917620865822845,
+        "significant_pairs": 50,
+        "best_lag": "10"
+      }
+    },
+    "overall_stats": {
+      "highest_correlation": 0.9935793054964,
+      "average_correlation": 0.42225227197444803,
+      "best_horizon_lag_combo": "180d_lag20",
+      "most_frequent_horizon": "365",
+      "most_frequent_lag": "3"
+    },
+    "method": "pearson",
+    "min_correlation_threshold": 0.3
+  },
+  "parameters": {
+    "symbols": [
+      "JNJ",
+      "PFE",
+      "MRK",
+      "ABBV",
+      "LLY",
+      "BMY",
+      "AMGN",
+      "GILD",
+      "BIIB",
+      "VRTX",
+      "REGN",
+      "ILMN",
+      "MRNA",
+      "BNTX",
+      "ZTS",
+      "TAK",
+      "NVO",
+      "SNY",
+      "UNH",
+      "CVS",
+      "CI",
+      "HUM",
+      "CNC",
+      "MOH",
+      "MDT",
+      "ABT",
+      "TMO",
+      "DHR",
+      "SYK",
+      "BSX",
+      "EW",
+      "ISRG",
+      "DXCM",
+      "HOLX",
+      "BDX",
+      "BAX",
+      "ZBH",
+      "ALGN",
+      "IDXX",
+      "IQV",
+      "MTD",
+      "A",
+      "WST",
+      "BMRN",
+      "TECH",
+      "INCY",
+      "EXAS",
+      "IONS",
+      "ALNY",
+      "RARE"
+    ],
+    "period": "2y",
+    "interval": "1d",
+    "time_horizons": [
+      30,
+      90,
+      180,
+      365
+    ],
+    "lag_periods": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "top_n": 10,
+    "correlation_method": "pearson",
+    "return_method": "pct_change",
+    "min_correlation": 0.3,
+    "enable_detrending": false,
+    "detrend_method": "linear",
+    "enable_market_adjustment": false,
+    "market_index": "SPY",
+    "market_adjustment_method": "beta_adjust",
+    "enable_normalization": true,
+    "normalization_method": "zscore"
+  },
+  "timestamp": "20250815_233618"
+}

@@ -35,7 +35,7 @@ class StockDataFetcher:
         filename = f"{symbol}_{period}_{interval}.pkl"
         return self.cache_dir / filename
     
-    def is_cache_valid(self, cache_path: Path, max_age_hours: int = 1) -> bool:
+    def is_cache_valid(self, cache_path: Path, max_age_hours: int = 24) -> bool:
         """Check if cached data is still valid"""
         if not cache_path.exists():
             return False
@@ -478,11 +478,30 @@ class StockDataFetcher:
             stock_data = self.fetch_multiple_stocks(symbols, period, interval)
         
         price_data = pd.DataFrame()
+        failed_symbols = []
+        successful_symbols = []
+        
         for symbol, data in stock_data.items():
             if not data.empty and column in data.columns:
                 price_data[symbol] = data[column]
+                successful_symbols.append(symbol)
+            else:
+                failed_symbols.append(symbol)
         
-        return price_data.dropna()
+        # Log information about failed symbols
+        if failed_symbols:
+            logger.warning(f"Failed to fetch data for {len(failed_symbols)} symbols: {failed_symbols}")
+        
+        if successful_symbols:
+            logger.info(f"Successfully fetched data for {len(successful_symbols)} symbols: {successful_symbols}")
+        
+        # Apply dropna and check if we have any data left
+        clean_data = price_data.dropna()
+        
+        if clean_data.empty and not price_data.empty:
+            logger.warning("All data was dropped due to missing values. This might indicate data quality issues.")
+        
+        return clean_data
     
     def clear_cache(self, symbol: str = None):
         """Clear cache files

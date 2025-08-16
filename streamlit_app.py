@@ -232,6 +232,100 @@ def convert_lag_periods_to_standard_units(lag_periods, interval):
         # For daily+ data, lag periods are already in the correct unit (days)
         return lag_periods
 
+def get_intelligent_defaults_for_interval(interval):
+    """Get intelligent defaults for periods, lag periods, and time horizons based on interval
+    
+    Args:
+        interval: Time interval (e.g., '1m', '5m', '1h', '1d')
+    
+    Returns:
+        Dictionary with recommended defaults for the given interval
+    """
+    defaults = {
+        "1m": {
+            "periods": ["1d", "3d", "1w"],
+            "default_period": "1d",
+            "lag_periods": [1, 5, 15, 30, 60],  # minutes
+            "max_lag_default": 60,
+            "max_lag_max": 240,
+            "time_horizons": ["1d", "3d", "1w"],
+            "unit": "minutes",
+            "warning": "1-minute data is limited to 7 days maximum by Yahoo Finance"
+        },
+        "5m": {
+            "periods": ["1w", "1mo", "2mo"],
+            "default_period": "1mo",
+            "lag_periods": [5, 15, 30, 60, 120],  # minutes
+            "max_lag_default": 120,
+            "max_lag_max": 480,
+            "time_horizons": ["1w", "1mo", "2mo"],
+            "unit": "minutes",
+            "warning": "5-minute data is limited to 60 days maximum by Yahoo Finance"
+        },
+        "15m": {
+            "periods": ["1w", "1mo", "2mo"],
+            "default_period": "1mo",
+            "lag_periods": [15, 30, 60, 120, 240],  # minutes
+            "max_lag_default": 120,
+            "max_lag_max": 480,
+            "time_horizons": ["1w", "1mo", "2mo"],
+            "unit": "minutes",
+            "warning": "15-minute data is limited to 60 days maximum by Yahoo Finance"
+        },
+        "30m": {
+            "periods": ["1w", "1mo", "2mo"],
+            "default_period": "1mo",
+            "lag_periods": [30, 60, 120, 240, 480],  # minutes
+            "max_lag_default": 240,
+            "max_lag_max": 720,
+            "time_horizons": ["1w", "1mo", "2mo"],
+            "unit": "minutes",
+            "warning": "30-minute data is limited to 60 days maximum by Yahoo Finance"
+        },
+        "1h": {
+            "periods": ["1mo", "3mo", "6mo", "1y", "2y"],
+            "default_period": "6mo",
+            "lag_periods": [1, 3, 6, 12, 24],  # hours
+            "max_lag_default": 24,
+            "max_lag_max": 168,
+            "time_horizons": ["1mo", "3mo", "6mo", "1y"],
+            "unit": "hours",
+            "warning": "1-hour data is limited to 730 days maximum by Yahoo Finance"
+        },
+        "1d": {
+            "periods": ["1mo", "6mo", "1y", "2y", "5y", "max"],
+            "default_period": "1y",
+            "lag_periods": [1, 3, 5, 10, 20],  # days
+            "max_lag_default": 10,
+            "max_lag_max": 60,
+            "time_horizons": ["1mo", "3mo", "6mo", "1y", "2y"],
+            "unit": "days",
+            "warning": None
+        },
+        "1wk": {
+            "periods": ["6mo", "1y", "2y", "5y", "max"],
+            "default_period": "2y",
+            "lag_periods": [1, 2, 4, 8, 12],  # weeks
+            "max_lag_default": 4,
+            "max_lag_max": 26,
+            "time_horizons": ["6mo", "1y", "2y", "5y"],
+            "unit": "weeks",
+            "warning": None
+        },
+        "1mo": {
+            "periods": ["1y", "2y", "5y", "max"],
+            "default_period": "5y",
+            "lag_periods": [1, 2, 3, 6, 12],  # months
+            "max_lag_default": 3,
+            "max_lag_max": 24,
+            "time_horizons": ["1y", "2y", "5y", "max"],
+            "unit": "months",
+            "warning": None
+        }
+    }
+    
+    return defaults.get(interval, defaults["1d"])  # Default to daily if interval not found
+
 def create_correlation_heatmap(results_df, lag_periods=0, interval='1d'):
     """Create interactive correlation heatmap"""
     lag_data = results_df[results_df['lag_days'] == lag_periods]
@@ -354,6 +448,125 @@ def create_lag_profile_plot(results_df, leader, follower, interval='1d'):
     fig.update_xaxes(title_text=f"Lag {unit_label}", row=2, col=1)
     
     return fig
+
+def create_stock_chart_viewer(symbols, period='1y', interval='1d'):
+    """Create interactive stock chart viewer for correlated stocks"""
+    try:
+        # Initialize data fetcher
+        data_fetcher = StockDataFetcher()
+        
+        # Fetch price data for all symbols at once (more efficient)
+        try:
+            all_data = data_fetcher.get_price_data(symbols, period=period, interval=interval)
+            if all_data.empty:
+                st.warning(f"No data available for any of the selected stocks: {', '.join(symbols)}")
+                return None
+        except Exception as e:
+            st.error(f"Failed to fetch stock data: {str(e)}")
+            return None
+        
+        # Extract individual stock data and track successful/failed symbols
+        price_data = {}
+        failed_symbols = []
+        successful_symbols = []
+        
+        for symbol in symbols:
+            if symbol in all_data.columns:
+                stock_data = all_data[symbol].dropna()
+                if not stock_data.empty and len(stock_data) > 10:  # Ensure sufficient data points
+                    price_data[symbol] = stock_data
+                    successful_symbols.append(symbol)
+                else:
+                    failed_symbols.append(symbol)
+            else:
+                failed_symbols.append(symbol)
+        
+        # Provide informative feedback to users
+        if failed_symbols:
+            st.warning(
+                f"⚠️ Could not fetch sufficient data for: {', '.join(failed_symbols)}. "
+                f"This may be due to delisted stocks, invalid symbols, or insufficient historical data."
+            )
+        
+        if successful_symbols:
+            st.success(f"✅ Successfully loaded data for: {', '.join(successful_symbols)}")
+        
+        if not price_data:
+            st.error(
+                f"❌ No valid stock data available for chart creation. "
+                f"Please try selecting different stocks or check if the symbols are correct."
+            )
+            return None
+        
+        if len(price_data) < 2:
+            st.info(
+                f"ℹ️ Only {len(price_data)} stock(s) have valid data. "
+                f"Charts work best with 2 or more stocks for comparison."
+            )
+            
+        # Create subplot
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=['Stock Prices (Normalized)', 'Daily Returns'],
+            vertical_spacing=0.1,
+            row_heights=[0.7, 0.3]
+        )
+        
+        # Colors for different stocks
+        colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+        
+        # Plot normalized prices
+        for i, (symbol, data) in enumerate(price_data.items()):
+            if data.empty:
+                continue
+                
+            # Normalize to start at 100
+            normalized_data = (data / data.iloc[0]) * 100
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=data.index,
+                    y=normalized_data,
+                    mode='lines',
+                    name=f'{symbol} (Price)',
+                    line=dict(color=colors[i % len(colors)], width=2)
+                ),
+                row=1, col=1
+            )
+            
+            # Calculate and plot returns
+            returns = data.pct_change().dropna() * 100
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=returns.index,
+                    y=returns,
+                    mode='lines',
+                    name=f'{symbol} (Returns)',
+                    line=dict(color=colors[i % len(colors)], width=1),
+                    opacity=0.7
+                ),
+                row=2, col=1
+            )
+        
+        # Update layout
+        fig.update_layout(
+            title=f'Stock Chart Comparison: {", ".join(symbols)}',
+            height=600,
+            showlegend=True,
+            hovermode='x unified'
+        )
+        
+        # Update y-axes labels
+        fig.update_yaxes(title_text="Normalized Price (Base=100)", row=1, col=1)
+        fig.update_yaxes(title_text="Daily Returns (%)", row=2, col=1)
+        fig.update_xaxes(title_text="Date", row=2, col=1)
+        
+        return fig
+        
+    except Exception as e:
+        st.error(f"Error creating stock chart: {str(e)}")
+        return None
 
 def create_backtest_plot(backtest_data):
     """Create backtest results plot"""
@@ -520,57 +733,46 @@ def main():
     # Data parameters - conditional based on analysis type
     st.sidebar.subheader("Data Parameters")
     
-    # For Enhanced Correlation Discovery, period is handled by time horizons
-    if analysis_type != "Enhanced Correlation Discovery":
-        period = st.sidebar.selectbox(
-            "Data Period:",
-            options=["1w", "1mo", "6mo", "1y", "2y", "5y", "max"],
-            index=3,  # Default to 1y
-            help="Time period for historical data analysis"
-        )
-    else:
-        # Default period for Enhanced Correlation Discovery (will be overridden by time horizons)
-        period = "2y"
-    
+    # First select interval to determine intelligent defaults
     interval = st.sidebar.selectbox(
         "Data Interval:",
         options=["1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"],
         index=5,  # Default to 1d
-        help="Granularity of price data (high-frequency intervals limited to shorter periods)"
+        help="Granularity of price data (determines available periods and optimal lag ranges)"
     )
     
-    # Show warning for high-frequency data with long periods
-    if interval in ["1m", "5m", "15m", "30m", "1h"] and period in ["2y", "5y", "max"]:
-        st.sidebar.warning(
-            "⚠️ High-frequency data (1m-1h) is only available for shorter periods. "
-            "Yahoo Finance limits: 1m data ≤ 7 days, sub-hourly data ≤ 60 days, 1h data ≤ 730 days."
+    # Get intelligent defaults based on selected interval
+    interval_defaults = get_intelligent_defaults_for_interval(interval)
+    
+    # Show interval-specific warning if exists
+    if interval_defaults["warning"]:
+        st.sidebar.warning(f"⚠️ {interval_defaults['warning']}")
+    
+    # For Enhanced Correlation Discovery, period is handled by time horizons
+    if analysis_type != "Enhanced Correlation Discovery":
+        # Use intelligent period options based on interval
+        period_options = interval_defaults["periods"]
+        default_period_index = period_options.index(interval_defaults["default_period"]) if interval_defaults["default_period"] in period_options else 0
+        
+        period = st.sidebar.selectbox(
+            "Data Period:",
+            options=period_options,
+            index=default_period_index,
+            help=f"Time period optimized for {interval} interval data"
         )
+    else:
+        # Default period for Enhanced Correlation Discovery (will be overridden by time horizons)
+        period = interval_defaults["default_period"]
     
     # Context-aware analysis parameters based on selected analysis type
     if analysis_type == "Lead-Lag Analysis":
         st.sidebar.subheader("🔍 Lead-Lag Parameters")
         
-        # Adjust lag parameters based on interval
-        if interval == "1m":
-            lag_unit = "minutes"
-            max_lag_default = 30  # 30 minutes
-            max_lag_max = 120     # 2 hours in minutes
-            lag_help = "Maximum lag in minutes for 1-minute data"
-        elif interval in ["5m", "15m", "30m"]:
-            lag_unit = "minutes"
-            max_lag_default = 120  # 2 hours in minutes
-            max_lag_max = 720      # 12 hours in minutes
-            lag_help = f"Maximum lag in minutes for {interval} data"
-        elif interval == "1h":
-            lag_unit = "hours"
-            max_lag_default = 24  # 1 day in hours
-            max_lag_max = 168     # 1 week in hours
-            lag_help = "Maximum lag in hours for 1-hour data"
-        else:
-            lag_unit = "days"
-            max_lag_default = 10
-            max_lag_max = 30
-            lag_help = "Maximum lag in days for daily+ data"
+        # Use intelligent defaults for lag parameters
+        lag_unit = interval_defaults["unit"]
+        max_lag_default = interval_defaults["max_lag_default"]
+        max_lag_max = interval_defaults["max_lag_max"]
+        lag_help = f"Maximum lag in {lag_unit} for {interval} data (optimized for this interval)"
         
         max_lag = st.sidebar.slider(
             f"Maximum Lag ({lag_unit}):",
@@ -579,6 +781,10 @@ def main():
             value=max_lag_default,
             help=lag_help
         )
+        
+        # Show recommended lag periods for this interval
+        recommended_lags = ", ".join(map(str, interval_defaults["lag_periods"]))
+        st.sidebar.info(f"💡 Recommended lag periods for {interval}: {recommended_lags} {lag_unit}")
         
         min_correlation = st.sidebar.slider(
             "Minimum Correlation Threshold:",
@@ -607,14 +813,22 @@ def main():
         if analysis_type == "Enhanced Correlation Discovery":
             st.sidebar.info("💡 Lag periods are configured in the Enhanced Parameters section below")
         else:
-            # Simple max lag for basic correlation discovery
+            # Simple max lag for basic correlation discovery - use intelligent defaults
+            lag_unit = interval_defaults["unit"]
+            max_lag_default = min(interval_defaults["max_lag_default"], interval_defaults["max_lag_max"] // 2)
+            max_lag_max = interval_defaults["max_lag_max"]
+            
             max_lag = st.sidebar.slider(
-                "Maximum Lag (days):",
+                f"Maximum Lag ({lag_unit}):",
                 min_value=1,
-                max_value=30,
-                value=5,
-                help="Maximum lag in days for correlation discovery"
+                max_value=max_lag_max,
+                value=max_lag_default,
+                help=f"Maximum lag in {lag_unit} for correlation discovery (optimized for {interval} data)"
             )
+            
+            # Show recommended range
+            recommended_range = f"{interval_defaults['lag_periods'][0]}-{interval_defaults['lag_periods'][-1]}"
+            st.sidebar.info(f"💡 Recommended range for {interval}: {recommended_range} {lag_unit}")
     
     # Common parameters for all analysis types
     st.sidebar.subheader("📊 Common Parameters")
@@ -791,29 +1005,16 @@ def main():
         
         st.sidebar.info("🎯 Multi-horizon analysis across different time periods and lag structures")
         
-        # Time horizons - automatically analyze all available periods
+        # Time horizons - use intelligent defaults based on interval
         st.sidebar.markdown("**📅 Time Horizons Analysis:**")
-        available_periods = ["1w", "1mo", "3mo", "6mo", "1y", "2y"]
-        time_horizons = available_periods  # Use all available periods
+        time_horizons = interval_defaults["time_horizons"]
         
-        st.sidebar.info(f"🔄 Analyzing all {len(time_horizons)} time horizons: {', '.join(time_horizons)}")
+        st.sidebar.info(f"🔄 Analyzing {len(time_horizons)} optimized time horizons for {interval}: {', '.join(time_horizons)}")
         
-        # Lag periods selection - dynamic based on interval
-        lag_unit = get_time_unit_label(interval)
-        
-        # Set appropriate default values based on interval
-        if interval == "1m":
-            default_lags = "5,15,30,60,120"  # minutes
-            help_text = "Enter lag periods in minutes, separated by commas (e.g., 5,15,30,60,120)"
-        elif interval in ["5m", "15m", "30m"]:
-            default_lags = "15,30,60,120,240"  # minutes
-            help_text = f"Enter lag periods in minutes, separated by commas (e.g., 15,30,60,120,240)"
-        elif interval == "1h":
-            default_lags = "1,3,6,12,24"  # hours
-            help_text = "Enter lag periods in hours, separated by commas (e.g., 1,3,6,12,24)"
-        else:
-            default_lags = "1,3,5,10,20"  # days
-            help_text = "Enter lag periods in days, separated by commas (e.g., 1,3,5,10,20)"
+        # Lag periods selection - use intelligent defaults
+        lag_unit = interval_defaults["unit"]
+        default_lags = ",".join(map(str, interval_defaults["lag_periods"]))
+        help_text = f"Enter lag periods in {lag_unit}, separated by commas. Defaults are optimized for {interval} data."
         
         st.sidebar.markdown(f"**⏱️ Lag Periods ({lag_unit}):**")
         lag_periods_input = st.sidebar.text_input(
@@ -825,12 +1026,15 @@ def main():
         try:
             lag_periods = [int(x.strip()) for x in lag_periods_input.split(",") if x.strip()]
             if not lag_periods:
-                lag_periods = [int(x) for x in default_lags.split(",")]  # Use defaults
+                lag_periods = interval_defaults["lag_periods"]  # Use intelligent defaults
         except ValueError:
-            st.sidebar.error("Invalid lag periods format. Using default values.")
-            lag_periods = [int(x) for x in default_lags.split(",")]
+            st.sidebar.error("Invalid lag periods format. Using intelligent defaults.")
+            lag_periods = interval_defaults["lag_periods"]
         
         st.sidebar.write(f"Selected lag periods: {', '.join(map(str, lag_periods))} {lag_unit}")
+        
+        # Show optimization info
+        st.sidebar.success(f"✅ Parameters optimized for {interval} interval: {len(time_horizons)} horizons × {len(lag_periods)} lags = {len(time_horizons) * len(lag_periods)} combinations")
         
         # Top N correlations
         top_n_enhanced = st.sidebar.slider(
@@ -1432,13 +1636,37 @@ def main():
                 interval = st.session_state.get('interval', '1d')
                 period = st.session_state.get('period', '1y')
                 
+                # Create clearer unit explanations
+                interval_explanation = {
+                    '1m': 'every minute',
+                    '5m': 'every 5 minutes', 
+                    '15m': 'every 15 minutes',
+                    '30m': 'every 30 minutes',
+                    '1h': 'every hour',
+                    '1d': 'daily',
+                    '1wk': 'weekly',
+                    '1mo': 'monthly'
+                }.get(interval, f'every {interval}')
+                
+                period_explanation = {
+                    '1d': '1 day',
+                    '5d': '5 days', 
+                    '1mo': '1 month',
+                    '3mo': '3 months',
+                    '6mo': '6 months',
+                    '1y': '1 year',
+                    '2y': '2 years',
+                    '5y': '5 years',
+                    '10y': '10 years'
+                }.get(period, period)
+                
                 st.info(
                     f"📊 **Understanding the Results:**\n"
-                    f"• **Data Period**: {period} of historical data was analyzed\n"
-                    f"• **Data Interval**: Price data sampled at {interval} intervals\n"
-                    f"• **Correlation**: Strength of relationship between stock pairs (-1 to +1)\n"
-                    f"• **P-Value**: Statistical significance (lower values indicate more reliable correlations)\n"
-                    f"• **Strength**: Qualitative assessment of correlation magnitude (Weak/Moderate/Strong/Very Strong)"
+                    f"• **Data Period**: {period_explanation} of historical stock prices were analyzed\n"
+                    f"• **Data Sampling**: Stock prices were collected {interval_explanation}\n"
+                    f"• **Correlation**: Strength of relationship between stock pairs (-1.0 to +1.0, where ±1.0 is perfect correlation)\n"
+                    f"• **P-Value**: Statistical significance (values < 0.05 indicate reliable correlations)\n"
+                    f"• **Strength**: Qualitative assessment (Weak < 0.3, Moderate 0.3-0.6, Strong 0.6-0.8, Very Strong > 0.8)"
                 )
                 
                 correlation_df = results['correlation_results']
@@ -1469,10 +1697,80 @@ def main():
                     if col in display_df.columns:
                         display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}" if pd.notna(x) else "N/A")
                 
-                st.dataframe(
-                    display_df,
-                    use_container_width=True
-                )
+                # Enhanced interactive correlation display
+                st.markdown("**💡 Click on any correlation pair below to instantly chart them!**")
+                
+                # Create a more interactive display
+                for idx, (_, row) in enumerate(correlation_df.iterrows()):
+                    with st.container():
+                        col1, col2, col3, col4, col5 = st.columns([2.5, 1.5, 1.2, 1.2, 1.6])
+                        
+                        with col1:
+                            # Clickable stock pair button
+                            pair_key = f"select_pair_{idx}"
+                            if st.button(
+                                f"📊 {row['stock1']} ↔ {row['stock2']}",
+                                key=pair_key,
+                                help=f"Click to chart {row['stock1']} and {row['stock2']}",
+                                use_container_width=True
+                            ):
+                                st.session_state['selected_chart_stocks'] = [row['stock1'], row['stock2']]
+                                st.rerun()
+                        
+                        with col2:
+                            # Correlation value with color coding
+                            corr_val = row['correlation']
+                            if abs(corr_val) >= 0.8:
+                                color = "🟢"
+                            elif abs(corr_val) >= 0.6:
+                                color = "🟡"
+                            elif abs(corr_val) >= 0.4:
+                                color = "🟠"
+                            else:
+                                color = "🔴"
+                            st.write(f"{color} **{corr_val:.4f}**")
+                        
+                        with col3:
+                            st.write(f"**{row['strength']}**")
+                        
+                        with col4:
+                            p_val = row['p_value']
+                            significance = "✅" if p_val < 0.05 else "❌"
+                            st.write(f"{significance} {p_val:.6f}")
+                        
+                        with col5:
+                            # Show additional metrics if available
+                            if 'adjusted_p_value' in row and pd.notna(row['adjusted_p_value']):
+                                adj_p_val = row['adjusted_p_value']
+                                adj_sig = "✅" if adj_p_val < 0.05 else "❌"
+                                st.write(f"Adj: {adj_sig} {adj_p_val:.6f}")
+                            else:
+                                st.write("—")
+                        
+                        # Add a subtle separator
+                        if idx < len(correlation_df) - 1:
+                            st.markdown("<hr style='margin: 0.5rem 0; border: 0.5px solid #e0e0e0;'>", unsafe_allow_html=True)
+                
+                # Column headers for clarity
+                st.markdown("---")
+                col1, col2, col3, col4, col5 = st.columns([2.5, 1.5, 1.2, 1.2, 1.6])
+                with col1:
+                    st.markdown("**Stock Pair**")
+                with col2:
+                    st.markdown("**Correlation**")
+                with col3:
+                    st.markdown("**Strength**")
+                with col4:
+                    st.markdown("**P-Value**")
+                with col5:
+                    st.markdown("**Adjusted P-Val**")
+                
+                # Also show the traditional dataframe for reference
+                with st.expander("📋 View Full Data Table", expanded=False):
+                    st.dataframe(
+                        display_df,
+                        use_container_width=True
+                    )
                 
                 # Statistical significance indicators
                 if 'adjusted_p_value' in correlation_df.columns:
@@ -1516,13 +1814,95 @@ def main():
                         ))
                         
                         fig.update_layout(
-                            title="Stock Correlation Matrix",
-                            xaxis_title="Stock",
-                            yaxis_title="Stock",
-                            height=600
+                            title='Correlation Matrix Heatmap',
+                            xaxis_title='Stock Symbol',
+                            yaxis_title='Stock Symbol',
+                            height=500
                         )
                         
                         st.plotly_chart(fig, use_container_width=True)
+                
+                # Stock Chart Viewer
+                st.markdown('<h3 class="sub-header">📈 Interactive Stock Chart Viewer</h3>', unsafe_allow_html=True)
+                st.info("📊 Compare price movements of any stocks from your dataset. Click on correlation pairs below for quick selection!")
+                
+                # Get all available stocks (from original selection + correlation results)
+                correlation_stocks = list(set(correlation_df['stock1'].tolist() + correlation_df['stock2'].tolist()))
+                all_available_stocks = list(set(symbols + correlation_stocks))  # Include original symbols
+                all_available_stocks.sort()  # Sort alphabetically for better UX
+                
+                # Quick selection buttons for top correlation pairs
+                st.markdown("**🎯 Quick Select Top Correlation Pairs:**")
+                
+                # Create clickable buttons for top 5 correlation pairs
+                top_pairs = correlation_df.head(5)
+                button_cols = st.columns(min(5, len(top_pairs)))
+                
+                for idx, (_, row) in enumerate(top_pairs.iterrows()):
+                    if idx < len(button_cols):
+                        with button_cols[idx]:
+                            pair_label = f"{row['stock1']} ↔ {row['stock2']}"
+                            correlation_val = f"{row['correlation']:.3f}"
+                            if st.button(
+                                f"{pair_label}\n({correlation_val})", 
+                                key=f"pair_select_{idx}",
+                                help=f"Select {row['stock1']} and {row['stock2']} for chart comparison"
+                            ):
+                                st.session_state['selected_chart_stocks'] = [row['stock1'], row['stock2']]
+                                st.rerun()
+                
+                st.markdown("---")
+                
+                # Stock selection for chart viewer
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    # Use session state for selected stocks if available
+                    default_selection = st.session_state.get('selected_chart_stocks', all_available_stocks[:min(4, len(all_available_stocks))])
+                    
+                    selected_stocks_for_chart = st.multiselect(
+                        "Select stocks to compare (up to 6 stocks):",
+                        options=all_available_stocks,
+                        default=default_selection,
+                        max_selections=6,
+                        help="Choose any stocks from your dataset to visualize their price movements",
+                        key="chart_stock_selector"
+                    )
+                
+                with col2:
+                    chart_period = st.selectbox(
+                        "Chart Time Period:",
+                        options=['1mo', '3mo', '6mo', '1y', '2y'],
+                        index=2,
+                        help="Time period for the stock chart comparison"
+                    )
+                
+                if selected_stocks_for_chart:
+                    chart_interval = st.session_state.get('interval', '1d')
+                    chart_fig = create_stock_chart_viewer(selected_stocks_for_chart, period=chart_period, interval=chart_interval)
+                    
+                    if chart_fig:
+                        st.plotly_chart(chart_fig, use_container_width=True)
+                        
+                        # Add correlation insights
+                        if len(selected_stocks_for_chart) >= 2:
+                            st.markdown('<h4 class="sub-header">🔍 Correlation Insights</h4>', unsafe_allow_html=True)
+                            
+                            insights = []
+                            for _, row in correlation_df.iterrows():
+                                if row['stock1'] in selected_stocks_for_chart and row['stock2'] in selected_stocks_for_chart:
+                                    correlation_strength = row['strength']
+                                    correlation_value = row['correlation']
+                                    insights.append(
+                                        f"• **{row['stock1']} ↔ {row['stock2']}**: {correlation_strength} correlation ({correlation_value:.3f})"
+                                    )
+                            
+                            if insights:
+                                st.markdown("\n".join(insights))
+                            else:
+                                st.info("No correlation data available for the selected stock combination.")
+                    else:
+                        st.warning("Unable to create stock chart. Please check if the selected stocks have available data.")
             else:
                 # Show message when no correlations found above threshold
                 st.markdown('<h3 class="sub-header">🔍 Correlation Discovery Results</h3>', unsafe_allow_html=True)
@@ -1631,13 +2011,29 @@ def main():
                     horizon_data = results['horizon_breakdown']
                     horizon_summary = []
                     
+                    # Get current interval for clearer unit display
+                    current_interval = st.session_state.get('interval', '1d')
+                    interval_unit = {
+                        '1m': 'minutes',
+                        '5m': '5-minute periods', 
+                        '15m': '15-minute periods',
+                        '30m': '30-minute periods',
+                        '1h': 'hours',
+                        '1d': 'days',
+                        '1wk': 'weeks',
+                        '1mo': 'months'
+                    }.get(current_interval, f'{current_interval} periods')
+                    
                     for horizon, data in horizon_data.items():
+                        best_lag = data.get('best_lag', 0)
+                        lag_description = f"{abs(best_lag)} {interval_unit}" if best_lag != 0 else "No lag"
+                        
                         horizon_summary.append({
-                            'Time Horizon': horizon,
+                            'Time Horizon': f"{horizon} {interval_unit}",
                             'Top Correlation': f"{float(data.get('max_correlation') or 0):.4f}",
                             'Average Correlation': f"{float(data.get('avg_correlation') or 0):.4f}",
                             'Correlations Found': data.get('total_pairs', 0),
-                            'Best Lag Period': f"{data.get('best_lag', 0)} days"
+                            'Best Lag Period': lag_description
                         })
                     
                     horizon_df = pd.DataFrame(horizon_summary)
@@ -1673,6 +2069,101 @@ def main():
                     )
                     
                     st.plotly_chart(fig, use_container_width=True)
+                
+                # Stock Chart Viewer for Enhanced Correlation Discovery
+                st.markdown('<h3 class="sub-header">📈 Stock Chart Viewer</h3>', unsafe_allow_html=True)
+                st.info("📊 Compare price movements of correlated stocks across different time horizons and lag periods.")
+                
+                # Get unique stocks from enhanced correlation results
+                all_stocks_enhanced = list(set(enhanced_df['stock1'].tolist() + enhanced_df['stock2'].tolist()))
+                
+                # Stock selection for chart viewer
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    selected_stocks_enhanced = st.multiselect(
+                        "Select stocks to compare (up to 6 stocks):",
+                        options=all_stocks_enhanced,
+                        default=all_stocks_enhanced[:min(4, len(all_stocks_enhanced))],
+                        max_selections=6,
+                        help="Choose stocks from the enhanced correlation results to visualize their price movements",
+                        key="enhanced_stock_selector"
+                    )
+                
+                with col2:
+                    chart_period_enhanced = st.selectbox(
+                        "Chart Time Period:",
+                        options=['1mo', '3mo', '6mo', '1y', '2y'],
+                        index=3,
+                        help="Time period for the stock chart comparison",
+                        key="enhanced_chart_period"
+                    )
+                
+                if selected_stocks_enhanced:
+                    chart_interval_enhanced = st.session_state.get('interval', '1d')
+                    chart_fig_enhanced = create_stock_chart_viewer(selected_stocks_enhanced, period=chart_period_enhanced, interval=chart_interval_enhanced)
+                    
+                    if chart_fig_enhanced:
+                        st.plotly_chart(chart_fig_enhanced, use_container_width=True)
+                        
+                        # Add enhanced correlation insights with time horizon and lag information
+                        if len(selected_stocks_enhanced) >= 2:
+                            st.markdown('<h4 class="sub-header">🔍 Enhanced Correlation Insights</h4>', unsafe_allow_html=True)
+                            
+                            # Get current interval for unit explanations
+                            current_interval = st.session_state.get('interval', '1d')
+                            lag_unit = get_time_unit_label(current_interval)
+                            
+                            # Create clearer unit explanations
+                            interval_explanation = {
+                                '1m': 'minute',
+                                '5m': '5-minute period', 
+                                '15m': '15-minute period',
+                                '30m': '30-minute period',
+                                '1h': 'hour',
+                                '1d': 'day',
+                                '1wk': 'week',
+                                '1mo': 'month'
+                            }.get(current_interval, f'{current_interval} period')
+                            
+                            # Add comprehensive explanation first
+                            st.info(
+                                f"📋 **Understanding Enhanced Correlation Measurements:**\n"
+                                f"• **Time Horizon**: How far back the analysis looks (e.g., '365' = 365 {interval_explanation}s of historical data)\n"
+                                f"• **Lag Period**: How much one stock leads or follows another (measured in {interval_explanation}s)\n"
+                                f"• **Positive Lag**: First stock leads the second stock by this time\n"
+                                f"• **Negative Lag**: First stock follows the second stock by this time\n"
+                                f"• **Zero Lag**: Stocks move simultaneously"
+                            )
+                            
+                            insights_enhanced = []
+                            for _, row in enhanced_df.iterrows():
+                                if row['stock1'] in selected_stocks_enhanced and row['stock2'] in selected_stocks_enhanced:
+                                    correlation_strength = row['strength']
+                                    correlation_value = row['correlation']
+                                    time_horizon = row['time_horizon']
+                                    lag_period = row['lag_period']
+                                    
+                                    # Create more descriptive lag explanation
+                                    if lag_period > 0:
+                                        lag_description = f"{row['stock1']} leads {row['stock2']} by {abs(lag_period)} {interval_explanation}{'s' if abs(lag_period) != 1 else ''}"
+                                    elif lag_period < 0:
+                                        lag_description = f"{row['stock1']} follows {row['stock2']} by {abs(lag_period)} {interval_explanation}{'s' if abs(lag_period) != 1 else ''}"
+                                    else:
+                                        lag_description = f"{row['stock1']} and {row['stock2']} move simultaneously"
+                                    
+                                    insights_enhanced.append(
+                                        f"• **{row['stock1']} ↔ {row['stock2']}**: {correlation_strength} correlation ({correlation_value:.3f})\n"
+                                        f"  📊 Analysis Period: {time_horizon} {interval_explanation}{'s' if time_horizon != 1 else ''}\n"
+                                        f"  ⏱️ Lead/Lag: {lag_description}"
+                                    )
+                            
+                            if insights_enhanced:
+                                st.markdown("\n\n".join(insights_enhanced))
+                            else:
+                                st.info("No enhanced correlation data available for the selected stock combination.")
+                    else:
+                        st.warning("Unable to create stock chart. Please check if the selected stocks have available data.")
             
             else:
                 # Show message when no enhanced correlations found

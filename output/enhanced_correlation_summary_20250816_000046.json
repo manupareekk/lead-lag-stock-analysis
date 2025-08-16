@@ -1,0 +1,158 @@
+{
+  "summary": {
+    "total_combinations_analyzed": 38250,
+    "total_pairs_found": 24,
+    "time_horizons_tested": [
+      7,
+      30,
+      90,
+      180,
+      365,
+      730
+    ],
+    "lag_periods_tested": [
+      3,
+      6,
+      12,
+      24,
+      48
+    ],
+    "horizon_summaries": {
+      "7d": {
+        "total_pairs": 7,
+        "avg_correlation": 0.2644557185854556,
+        "max_correlation": 0.6262569502071765,
+        "significant_pairs": 7,
+        "best_lag": "3"
+      },
+      "30d": {
+        "total_pairs": 2,
+        "avg_correlation": -0.10729007919030112,
+        "max_correlation": 0.325857959084126,
+        "significant_pairs": 2,
+        "best_lag": "24"
+      },
+      "90d": {
+        "total_pairs": 1,
+        "avg_correlation": -0.8062673617931227,
+        "max_correlation": -0.8062673617931227,
+        "significant_pairs": 1,
+        "best_lag": "12"
+      },
+      "180d": {
+        "total_pairs": 3,
+        "avg_correlation": -0.19101150430971545,
+        "max_correlation": 0.4740378423215833,
+        "significant_pairs": 3,
+        "best_lag": "12"
+      },
+      "365d": {
+        "total_pairs": 4,
+        "avg_correlation": 0.2595910004764939,
+        "max_correlation": 0.950366269892944,
+        "significant_pairs": 4,
+        "best_lag": "6"
+      },
+      "730d": {
+        "total_pairs": 7,
+        "avg_correlation": 0.7474387353663754,
+        "max_correlation": 0.9951694849500988,
+        "significant_pairs": 7,
+        "best_lag": "12"
+      }
+    },
+    "overall_stats": {
+      "highest_correlation": 0.9951694849500988,
+      "average_correlation": 0.2719892977694134,
+      "best_horizon_lag_combo": "730d_lag12",
+      "most_frequent_horizon": "7",
+      "most_frequent_lag": "3"
+    },
+    "method": "pearson",
+    "min_correlation_threshold": 0.3
+  },
+  "parameters": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "GOOGL",
+      "GOOG",
+      "META",
+      "AMZN",
+      "TSLA",
+      "NVDA",
+      "CRM",
+      "ORCL",
+      "ADBE",
+      "NOW",
+      "INTU",
+      "WDAY",
+      "SNOW",
+      "PLTR",
+      "DDOG",
+      "ZM",
+      "OKTA",
+      "CRWD",
+      "NET",
+      "TEAM",
+      "VEEV",
+      "ZS",
+      "PANW",
+      "AMD",
+      "INTC",
+      "QCOM",
+      "AVGO",
+      "TXN",
+      "ADI",
+      "MRVL",
+      "LRCX",
+      "KLAC",
+      "AMAT",
+      "MU",
+      "NXPI",
+      "MCHP",
+      "ON",
+      "SWKS",
+      "QRVO",
+      "MPWR",
+      "ENPH",
+      "SEDG",
+      "HPQ",
+      "DELL",
+      "WDC",
+      "STX",
+      "NTAP",
+      "PSTG",
+      "PURE"
+    ],
+    "period": "2y",
+    "interval": "5m",
+    "time_horizons": [
+      7,
+      30,
+      90,
+      180,
+      365,
+      730
+    ],
+    "lag_periods": [
+      3,
+      6,
+      12,
+      24,
+      48
+    ],
+    "top_n": 10,
+    "correlation_method": "pearson",
+    "return_method": "pct_change",
+    "min_correlation": 0.3,
+    "enable_detrending": false,
+    "detrend_method": "linear",
+    "enable_market_adjustment": false,
+    "market_index": "SPY",
+    "market_adjustment_method": "beta_adjust",
+    "enable_normalization": true,
+    "normalization_method": "zscore"
+  },
+  "timestamp": "20250816_000046"
+}
