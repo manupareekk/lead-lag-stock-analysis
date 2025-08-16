@@ -517,14 +517,20 @@ def main():
     st.sidebar.markdown(analysis_descriptions[analysis_type])
     st.sidebar.markdown("---")
     
-    # Data parameters
+    # Data parameters - conditional based on analysis type
     st.sidebar.subheader("Data Parameters")
-    period = st.sidebar.selectbox(
-        "Data Period:",
-        options=["1w", "1mo", "6mo", "1y", "2y", "5y", "max"],
-        index=3,  # Default to 1y
-        help="Time period for historical data analysis"
-    )
+    
+    # For Enhanced Correlation Discovery, period is handled by time horizons
+    if analysis_type != "Enhanced Correlation Discovery":
+        period = st.sidebar.selectbox(
+            "Data Period:",
+            options=["1w", "1mo", "6mo", "1y", "2y", "5y", "max"],
+            index=3,  # Default to 1y
+            help="Time period for historical data analysis"
+        )
+    else:
+        # Default period for Enhanced Correlation Discovery (will be overridden by time horizons)
+        period = "2y"
     
     interval = st.sidebar.selectbox(
         "Data Interval:",
@@ -1303,6 +1309,8 @@ def main():
                             return int(horizon_str[:-1])
                         elif horizon_str.endswith('w'):
                             return int(horizon_str[:-1]) * 7
+                        elif horizon_str.endswith('mo'):
+                            return int(horizon_str[:-2]) * 30
                         elif horizon_str.endswith('m'):
                             return int(horizon_str[:-1]) * 30
                         elif horizon_str.endswith('y'):
